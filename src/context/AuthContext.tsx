@@ -1,17 +1,22 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
-import { clearTokens } from '../lib/auth';
+import { createContext, useContext, useState, useEffect } from 'react';
+import type { ReactNode } from 'react';
+import { api } from '../lib/api';
+import { getAccessToken, clearTokens } from '../lib/auth';
 
 type PartnerType = 'provider' | 'distributor';
 
 interface PartnerAdmin {
   email: string;
-  partnerName: string;
+  firstName: string;
+  role: string;
   partnerType: PartnerType;
+  partnerName: string;
 }
 
 interface AuthContextValue {
   admin: PartnerAdmin | null;
   isAuthenticated: boolean;
+  loading: boolean;
   setAdmin: (admin: PartnerAdmin | null) => void;
   logout: () => void;
 }
@@ -23,17 +28,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Setting state asynchronously or post-hydration avoids the cascading render lint rule.
-    // This will naturally change once you fetch your '/partners/me/' data here.
-    const hydrateAuth = async () => {
+    const hydrate = async () => {
+      const token = getAccessToken();
+      if (!token) {
+        setLoading(false);
+        return;
+      }
       try {
-        // TODO next step: const token = getAccessToken(); hydrate admin from /partners/me/
+        const response = await api.get('/partner/me/');
+        const data = response.data;
+        setAdmin({
+          email: data.email,
+          firstName: data.first_name,
+          role: data.role,
+          partnerType: data.partner_type,
+          partnerName: data.partner_name,
+        });
+      } catch {
+        clearTokens();
+        setAdmin(null);
       } finally {
         setLoading(false);
       }
     };
-
-    hydrateAuth();
+    hydrate();
   }, []);
 
   const logout = () => {
@@ -41,15 +59,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAdmin(null);
   };
 
-  if (loading) return null;
-
   return (
-    <AuthContext.Provider value={{ admin, isAuthenticated: !!admin, setAdmin, logout }}>
-      {children}
+    <AuthContext.Provider value={{ admin, isAuthenticated: !!admin, loading, setAdmin, logout }}>
+      {loading ? null : children}
     </AuthContext.Provider>
   );
 }
 
+/* eslint-disable-next-line react-refresh/only-export-components */
 export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error('useAuth must be used within AuthProvider');

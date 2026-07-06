@@ -57,7 +57,7 @@ export default function Landing() {
         </div>
         <div className="hero-image">
           <div className="hero-image-placeholder">
-            <span>Add hero image here</span>
+            <img alt="Secure your future" src='/home_image.png' />
           </div>
         </div>
       </section>

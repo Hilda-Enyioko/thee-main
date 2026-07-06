@@ -21,11 +21,15 @@
   padding: var(--space-3) var(--space-5);
   position: sticky;
   top: 0;
-  background: rgba(8, 11, 16, 0.85);
+  background: rgba(11, 31, 58, 0.95);
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
   z-index: 10;
   border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.logo {
+  color: var(--paper); /* --paper is now dark text — wrong here since navbar bg is dark again */
 }
 
 .logo, .footer-logo {
@@ -39,7 +43,7 @@
 
 .nav-links { display: flex; align-items: center; gap: var(--space-4); }
 .nav-links a {
-  color: var(--mist);
+  color: var(--ink);
   text-decoration: none;
   font-size: 0.95rem;
   transition: color 0.2s ease;
@@ -64,6 +68,10 @@
   align-items: center;
   padding: var(--space-5) var(--space-5) var(--space-5);
   min-height: 80vh;
+}
+
+.hero-text {
+  text-align: left;
 }
 
 .hero-text h1 {
@@ -107,15 +115,19 @@
 
 .hero-image-placeholder {
   aspect-ratio: 4 / 3;
-  border: 1px dashed rgba(255,255,255,0.2);
   border-radius: 12px;
+  overflow: hidden;              /* clips the image to the box */
+  background: linear-gradient(160deg, var(--deep-blue), var(--ink));
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--mist);
-  font-family: var(--font-mono);
-  font-size: 0.85rem;
-  background: linear-gradient(160deg, var(--deep-blue), var(--ink));
+}
+
+.hero-image-placeholder img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 /* Stats */
