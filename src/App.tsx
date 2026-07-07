@@ -19,9 +19,9 @@ export default function App() {
           <Route path="/" element={<Landing />} />
           <Route path="/onboard" element={<Onboarding />} />
           <Route path="/login" element={<Login />} />
-          <Route path="/kyc" element={<KycSubmission />} />
 
           <Route element={<ProtectedRoute />}>
+            <Route path="/kyc" element={<KycSubmission />} />
             <Route element={<RoleRoute allow="provider" />}>
               <Route path="/plans" element={<PlanManagement />} />
             </Route>

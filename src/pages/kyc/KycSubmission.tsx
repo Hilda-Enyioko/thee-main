@@ -73,8 +73,8 @@ export default function KycSubmission() {
             <div className="verify-line" />
             <h1>Documents submitted.</h1>
             <p>
-              Our team is reviewing your verification. We'll notify you at{' '}
-              <strong>{admin?.email}</strong> once your account is approved and your API key is active.
+              Our team is reviewing your verification for <strong>{admin?.partnerName}</strong>.
+              We'll notify you once your account is approved and your API key is active.
             </p>
           </div>
         ) : (

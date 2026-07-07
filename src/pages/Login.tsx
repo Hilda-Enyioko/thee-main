@@ -29,23 +29,18 @@ export default function Login() {
       const { tokens } = response.data;
       setTokens(tokens.access, tokens.refresh);
 
-      // /auth/login/ doesn't return partner_type or kyc_status, so fetch
-      // the full partner context right after storing tokens.
       const meResponse = await api.get('/partner/me/');
       const me = meResponse.data;
 
       setAdmin({
-        email: me.email,
-        firstName: me.first_name,
-        role: me.role,
         partnerType: me.partner_type,
         partnerName: me.partner_name,
+        isActive: me.is_active,
       });
 
-      // Not yet verified -> send them to submit KYC regardless of partner_type,
-      // since Plan Management / Access Requests are functionally locked until
-      // the account is verified anyway.
-      if (me.kyc_status && me.kyc_status !== 'verified') {
+      // is_active false = KYC not yet verified; send them to submit documents
+      // regardless of partner_type, since every other page is locked until then.
+      if (!me.is_active) {
         navigate('/kyc');
         return;
       }

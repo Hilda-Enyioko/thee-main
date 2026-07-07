@@ -6,11 +6,9 @@ import { getAccessToken, clearTokens } from '../lib/auth';
 type PartnerType = 'provider' | 'distributor';
 
 interface PartnerAdmin {
-  email: string;
-  firstName: string;
-  role: string;
   partnerType: PartnerType;
   partnerName: string;
+  isActive: boolean; // false = KYC not yet verified
 }
 
 interface AuthContextValue {
@@ -38,11 +36,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const response = await api.get('/partner/me/');
         const data = response.data;
         setAdmin({
-          email: data.email,
-          firstName: data.first_name,
-          role: data.role,
           partnerType: data.partner_type,
           partnerName: data.partner_name,
+          isActive: data.is_active,
         });
       } catch {
         clearTokens();
