@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { api } from '../lib/api';
-import { setTokens } from '../lib/auth';
+import { setTokens, setPartnerKey } from '../lib/auth';
 import { useAuth } from '../context/AuthContext';
 import './Login.css';
 
@@ -25,10 +25,17 @@ export default function Login() {
 
     setSubmitting(true);
     try {
-      const response = await api.post('/auth/login/', { email, password });
-      const { tokens } = response.data;
+      // Step 1: authenticate, get JWTs
+      const loginResponse = await api.post('/auth/login/', { email, password });
+      const { tokens } = loginResponse.data;
       setTokens(tokens.access, tokens.refresh);
 
+      // Step 2: retrieve X-Partner-Key using the same password, while it's
+      // still in memory.
+      const keyResponse = await api.post('/partner/api-key/retrieve/', { password });
+      setPartnerKey(keyResponse.data.api_key);
+
+      // Step 3: fetch partner context
       const meResponse = await api.get('/partner/me/');
       const me = meResponse.data;
 
@@ -38,8 +45,6 @@ export default function Login() {
         isActive: me.is_active,
       });
 
-      // is_active false = KYC not yet verified; send them to submit documents
-      // regardless of partner_type, since every other page is locked until then.
       if (!me.is_active) {
         navigate('/kyc');
         return;
