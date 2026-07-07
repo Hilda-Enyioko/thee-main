@@ -9,6 +9,7 @@ import Login from './pages/Login';
 import PlanManagement from './pages/plans/PlanManagement';
 import AccessRequests from './pages/distributor/AccessRequests';
 import Analytics from './pages/analytics/Analytics';
+import KycSubmission from './pages/kyc/KycSubmission';
 
 export default function App() {
   return (
@@ -18,6 +19,7 @@ export default function App() {
           <Route path="/" element={<Landing />} />
           <Route path="/onboard" element={<Onboarding />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/kyc" element={<KycSubmission />} />
 
           <Route element={<ProtectedRoute />}>
             <Route element={<RoleRoute allow="provider" />}>

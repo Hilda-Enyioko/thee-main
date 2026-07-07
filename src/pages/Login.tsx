@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import axios from 'axios';
 import { api } from '../lib/api';
 import { setTokens } from '../lib/auth';
 import { useAuth } from '../context/AuthContext';
@@ -30,29 +29,35 @@ export default function Login() {
       const { tokens } = response.data;
       setTokens(tokens.access, tokens.refresh);
 
+      // /auth/login/ doesn't return partner_type or kyc_status, so fetch
+      // the full partner context right after storing tokens.
       const meResponse = await api.get('/partner/me/');
-      setAdmin({
-        email: meResponse.data.email,
-        firstName: meResponse.data.first_name,
-        role: meResponse.data.role,
-        partnerType: meResponse.data.partner_type,
-        partnerName: meResponse.data.partner_name,
-      });
-      navigate(meResponse.data.partner_type === 'provider' ? '/plans' : '/access-requests');
+      const me = meResponse.data;
 
-      navigate('/analytics');
-    } catch (err: unknown) { // 1. Change 'any' to 'unknown'
-      // 2. Use Axios' built-in type guard to safely infer the type
-      if (axios.isAxiosError(err)) {
-        const status = err.response?.status;
-        if (status === 401 || status === 400) {
-          setError('Incorrect email or password.');
-          return;
-        }
+      setAdmin({
+        email: me.email,
+        firstName: me.first_name,
+        role: me.role,
+        partnerType: me.partner_type,
+        partnerName: me.partner_name,
+      });
+
+      // Not yet verified -> send them to submit KYC regardless of partner_type,
+      // since Plan Management / Access Requests are functionally locked until
+      // the account is verified anyway.
+      if (me.kyc_status && me.kyc_status !== 'verified') {
+        navigate('/kyc');
+        return;
       }
-      
-      // Fallback for non-Axios errors or other status codes
-      setError('Something went wrong. Please try again.');
+
+      navigate(me.partner_type === 'provider' ? '/plans' : '/access-requests');
+    } catch (err: any) {
+      const status = err.response?.status;
+      if (status === 401 || status === 400) {
+        setError('Incorrect email or password.');
+      } else {
+        setError('Something went wrong. Please try again.');
+      }
     } finally {
       setSubmitting(false);
     }
