@@ -60,7 +60,7 @@ export default function AccessRequests() {
   const fetchMyProviders = async () => {
     const res = await api.get('/partner/providers/');
     console.log('my providers response:', res.data);
-    setMyProviders(res.data.providers ?? []);
+    setMyProviders(res.data ?? []);
   };
 
   const fetchBrowseProviders = async () => {
