@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import "./Landing.css";
 
@@ -37,18 +37,6 @@ export default function Landing() {
   };
   const [activeSlide, setActiveSlide] = useState(0);
   const slide = slides[activeSlide];
-  const serviceSlides = [
-    { number: "01", title: "Providers", copy: "Bring products to market with a connected distribution layer." },
-    { number: "02", title: "Distributors", copy: "Access, request and sell plans without the friction." },
-    { number: "03", title: "Customers", copy: "Understand your cover and get protected with confidence." },
-  ];
-  const [activeService, setActiveService] = useState(0);
-
-  useEffect(() => {
-    const timer = window.setInterval(() => setActiveService((current) => (current + 1) % serviceSlides.length), 500);
-    return () => window.clearInterval(timer);
-  }, []);
-
   const moveSlide = (direction: number) => {
     setActiveSlide((current) => (current + direction + slides.length) % slides.length);
   };
@@ -82,7 +70,7 @@ export default function Landing() {
         <article key={activeSlide} className="story-slide" aria-live="polite"><div className="slide-number">0{activeSlide + 1}</div><p className="kicker">{slide.eyebrow}</p><h3>{slide.title}</h3><p>{slide.copy}</p><span className="slide-meta">{slide.meta} <b>↗</b></span></article>
       </section>
 
-      <section className="services" id="services"><div><p className="kicker">The ecosystem</p><h2>One platform.<br /><em>Every perspective.</em></h2></div><div className="service-showcase"><div className="service-rail">{serviceSlides.map((item, index) => <article key={item.title} className={index === activeService ? "active" : ""}><span>{item.number}</span><h3>{item.title}</h3><p>{item.copy}</p></article>)}</div><div className="slide-controls service-controls"><button onClick={() => setActiveService((activeService + serviceSlides.length - 1) % serviceSlides.length)} aria-label="Previous service">←</button><div className="slide-dots">{serviceSlides.map((item, index) => <button key={item.title} className={index === activeService ? "active" : ""} onClick={() => setActiveService(index)} aria-label={`Show ${item.title}`} />)}</div><button onClick={() => setActiveService((activeService + 1) % serviceSlides.length)} aria-label="Next service">→</button></div></div></section>
+      <section className="services" id="services"><div><p className="kicker">The ecosystem</p><h2>One platform.<br /><em>Every perspective.</em></h2></div><div className="service-rail"><article><span>01</span><h3>Providers</h3><p>Bring products to market with a connected distribution layer.</p></article><article><span>02</span><h3>Distributors</h3><p>Access, request and sell plans without the friction.</p></article><article><span>03</span><h3>Customers</h3><p>Understand your cover and get protected with confidence.</p></article></div></section>
 
       <section className="cta-section" id="contact">
         <div className="cta-copy"><p className="kicker">The next move</p><h2>Make insurance<br /><em>feel seamless.</em></h2><Link to="/onboard" className="primary-btn cta-button">Create free account <span>↗</span></Link></div>
