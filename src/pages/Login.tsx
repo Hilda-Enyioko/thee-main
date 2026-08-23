@@ -4,6 +4,7 @@ import { api } from '../lib/api';
 import { setTokens, setPartnerKey } from '../lib/auth';
 import { useAuth } from '../context/AuthContext';
 import './Login.css';
+import { SiteNav, SiteFooter } from '../components/SiteChrome';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -65,12 +66,7 @@ export default function Login() {
 
   return (
     <div className="login-page">
-      <nav className="login-nav">
-        <Link to="/" className="logo">
-          <span className="logo-mark">the</span>e<span className="logo-accent">insurance</span>
-        </Link>
-      </nav>
-
+      <SiteNav />
       <div className="login-card">
         <h1>Welcome back</h1>
         <p className="form-subtext">Log in to manage your plans and view analytics.</p>
@@ -107,6 +103,7 @@ export default function Login() {
           Don't have an account? <Link to="/onboard">Get started</Link>
         </p>
       </div>
+      <SiteFooter />
     </div>
   );
 }
