@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import './Onboarding.css';
+import { SiteNav, SiteFooter } from '../components/SiteChrome';
 
 type PartnerType = 'provider' | 'distributor';
 
@@ -109,11 +110,7 @@ export default function Onboarding() {
 
   return (
     <div className="onboarding">
-      <nav className="onboarding-nav">
-        <Link to="/" className="logo">
-          <span className="logo-mark">the</span>e<span className="logo-accent">insurance</span>
-        </Link>
-      </nav>
+      <SiteNav />
 
       <div className="onboarding-card">
         <div className="stepper">
@@ -275,6 +272,7 @@ export default function Onboarding() {
           </div>
         )}
       </div>
+      <SiteFooter />
     </div>
   );
 }
