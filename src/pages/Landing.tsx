@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Link } from "react-router-dom";
 import "./Landing.css";
+import "./Theme.css";
 
 const MEDIA = {
   approach: "https://d2ol7oe51mr4n9.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/5fc5651c-3b5d-4171-b507-87f7e635d1b4.mp4",
@@ -21,13 +22,13 @@ function HeroBackground() {
 }
 
 export default function Landing() {
-  const [loaded, setLoaded] = useState(false), [progress, setProgress] = useState(0), [menuOpen, setMenuOpen] = useState(false), [inquirySent, setInquirySent] = useState(false);
+  const [loaded, setLoaded] = useState(false), [progress, setProgress] = useState(0), [menuOpen, setMenuOpen] = useState(false), [inquirySent, setInquirySent] = useState(false), [theme, setTheme] = useState<"dark" | "light">("dark");
   const preload = useRef<HTMLVideoElement>(null), preloadDone = useRef(false);
   useEffect(() => { const v = preload.current; if (!v) return; let frame = 0; const started = performance.now(); const finish = () => { if (preloadDone.current) return; preloadDone.current = true; cancelAnimationFrame(frame); setProgress(100); setLoaded(true); }; const tick = (now: number) => { const value = Math.min(100, Math.round((now - started) / 1500 * 100)); setProgress(value); if (value >= 100) finish(); else frame = requestAnimationFrame(tick); }; v.play().catch(() => {}); frame = requestAnimationFrame(tick); return () => cancelAnimationFrame(frame); }, []);
   const handleInquiry = (e: FormEvent<HTMLFormElement>) => { e.preventDefault(); const f = new FormData(e.currentTarget); window.location.href = `mailto:contact@theeinsurance.com.ng?subject=${encodeURIComponent("TheeInsurance enquiry")}&body=${encodeURIComponent(`Name: ${f.get("name")}\nEmail: ${f.get("email")}\n\n${f.get("message")}`)}`; setInquirySent(true); };
-  return <main className={`landing ${loaded ? "is-loaded" : ""}`}>
+  return <main className={`landing theme-${theme} ${loaded ? "is-loaded" : ""}`}>
     <section className="portal-experience editorial-hero" id="home" onPointerMove={(event) => { if (event.pointerType === "mouse") { event.currentTarget.style.setProperty("--hero-x", `${(event.clientX / innerWidth - .5) * 16}px`); event.currentTarget.style.setProperty("--hero-y", `${(event.clientY / innerHeight - .5) * 12}px`); } }} onPointerLeave={(event) => { event.currentTarget.style.setProperty("--hero-x", "0px"); event.currentTarget.style.setProperty("--hero-y", "0px"); }}><HeroBackground /><div className="hero-grid" aria-hidden="true" /><div className="preloader"><video ref={preload} src={MEDIA.approach} muted playsInline preload="metadata" /><div className="preloader-shade" /></div><div className="preloader-count"><span>{progress}</span><b>%</b></div><a className="brand-lockup" href="#home" aria-label="TheeInsurance home"><img src="/theeinsurance-mark.jpg" alt="" /><span>theeinsurance</span></a>
-      <header className="portal-header chrome"><nav><a href="#why">Why</a><a href="#benefits">Benefits</a><a href="#contact">Contact</a></nav><button onClick={() => setMenuOpen(!menuOpen)} className="menu-button">Menu</button></header><div className={`mobile-portal-menu ${menuOpen ? "open" : ""}`}><a href="#why">Why</a><a href="#benefits">Benefits</a><Link to="/login">Log in</Link><Link to="/onboard">Create account</Link></div>
+      <header className="portal-header chrome"><nav><a href="#why">Why</a><a href="#benefits">Benefits</a><a href="#contact">Contact</a></nav><button onClick={() => setTheme(theme === "dark" ? "light" : "dark")} className="theme-toggle" aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}>{theme === "dark" ? "Light" : "Dark"}</button><button onClick={() => setMenuOpen(!menuOpen)} className="menu-button">Menu</button></header><div className={`mobile-portal-menu ${menuOpen ? "open" : ""}`}><a href="#why">Why</a><a href="#benefits">Benefits</a><Link to="/login">Log in</Link><Link to="/onboard">Create account</Link></div>
       <div className="editorial-copy chrome"><span className="editorial-kicker">TheeInsurance / Digital infrastructure</span><h1>Insurance infrastructure<br />that moves <em>Africa</em> forward.</h1></div>
       <div className="editorial-side chrome"><p>One digital operating layer for providers, distributors and customers—built to make protection easier to launch, understand and grow.</p><Link to="/onboard" className="editorial-cta">Create your account <span>↗</span></Link></div>
       <div className="editorial-wordmark" aria-hidden="true">theeInsurance</div>
