@@ -1,0 +1,84 @@
+.login-page {
+  min-height: 100vh;
+  background: var(--ink);
+  display: flex;
+  flex-direction: column;
+}
+
+.login-nav {
+  padding: var(--space-3) var(--space-5);
+}
+.login-nav .logo {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--paper);
+  text-decoration: none;
+}
+.logo-mark { color: var(--mist); font-weight: 500; }
+.logo-accent { color: var(--azure-bright); }
+
+.login-card {
+  max-width: 400px;
+  width: 100%;
+  margin: auto;
+  padding: var(--space-5) var(--space-4);
+}
+
+.login-card h1 {
+  font-family: var(--font-display);
+  color: var(--paper);
+  font-size: 1.8rem;
+  margin: 0 0 var(--space-2);
+}
+.form-subtext {
+  color: var(--mist);
+  margin-bottom: var(--space-4);
+}
+
+.login-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--paper);
+  font-size: 0.9rem;
+  margin-bottom: var(--space-3);
+}
+
+.login-form input {
+  background: var(--deep-blue);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  color: var(--paper);
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+}
+.login-form input:focus { border-color: var(--azure); }
+
+.login-form .btn-primary {
+  width: 100%;
+  border: none;
+  cursor: pointer;
+  margin-top: var(--space-2);
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+}
+
+.form-error-banner {
+  background: rgba(255, 90, 90, 0.1);
+  border: 1px solid rgba(255, 90, 90, 0.3);
+  color: #FF8A8A;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius);
+  font-size: 0.85rem;
+  margin-bottom: var(--space-4);
+}
+
+.form-footer-link {
+  text-align: center;
+  color: var(--mist);
+  font-size: 0.9rem;
+  margin-top: var(--space-4);
+}
+.form-footer-link a { color: var(--azure-bright); }

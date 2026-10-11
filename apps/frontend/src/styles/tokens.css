@@ -1,0 +1,71 @@
+:root {
+  /* color  -  light mode */
+  --ink: #F4F7FC;           /* page background, was near-black, now bright */
+  --deep-blue: #FFFFFF;     /* card/panel surface, was dark, now white */
+  --azure: #2F6FED;         /* primary action  -  unchanged, still the brand anchor */
+  --azure-bright: #1B54D6;  /* hover/emphasis  -  darkened since it now sits on white, not black */
+  --mist: #080B10;          /* secondary text  -  darkened for contrast on light bg */
+  --paper: #0B1F3A;         /* primary text  -  was light-on-dark, now dark-on-light (reuses deep blue) */
+
+  /* borders/shadows now need a dark-alpha base instead of white-alpha */
+  --line-rgb: 11, 31, 58;   /* use in rgba(var(--line-rgb), 0.08) etc. instead of rgba(255,255,255,0.08) */
+  --shadow: 0 2px 12px rgba(11, 31, 58, 0.06);
+
+  /* type  -  unchanged */
+  --font-display: 'Space Grotesk', sans-serif;
+  --font-body: 'Inter', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+
+  /* scale  -  unchanged */
+  --radius: 6px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 16px;
+  --space-4: 32px;
+  --space-5: 64px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--font-body);
+}
+
+@keyframes verify-sweep {
+  from { transform: scaleX(0); opacity: 0.6; }
+  to   { transform: scaleX(1); opacity: 1; }
+}
+.verify-line {
+  height: 1px;
+  background: var(--azure);
+  transform-origin: left;
+  animation: verify-sweep 0.6s ease-out;
+}
+
+a:focus-visible, button:focus-visible, input:focus-visible {
+  outline: 2px solid var(--azure);
+  outline-offset: 2px;
+}
+
+.logout-btn {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.15);
+  color: var(--mist);
+  padding: 8px 16px;
+  border-radius: var(--radius);
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+.logout-btn:hover {
+  border-color: var(--azure);
+  color: var(--paper);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .verify-line { animation: none; }
+}
