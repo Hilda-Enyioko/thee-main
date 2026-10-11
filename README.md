@@ -2,7 +2,7 @@
 
 A headless, API-first insurance distribution platform — **"Stripe for insurance"** for Nigeria. Companies integrate TheeInsurance into their products via API and offer insurance plans to their customers without building the insurance layer themselves.
 
-Built for the **DevCareer × Nomba Hack4FUTO Hackathon** by team **Meridian**.
+Built for by team **Meridian**.
 
 ---
 
@@ -291,15 +291,10 @@ In Progress:
 
 # Team — Meridian
 
-- **Hilda Enyioko**
-  - Backend architecture
-  - Payments integration
-  - API design
+- **Hilda Enyioko** — Full-stack development (backend architecture, payments integration, API design)
+- **Chinedu Adindu** — AI/Automation engineering (n8n workflows: notifications, dunning, plan recommendation, provider analytics)
 
-- **Chinedu Adindu**
-  - AI & Automation
-  - n8n workflows
-  - Notifications
-  - Dunning
-  - AI recommendations
-  - Provider analytics
+
+
+PLEASE READ FILE FOR FULL WALKTHROUGH ON SIGNUP AND APPLICATION USE:
+https://docs.google.com/document/d/1Copu9wlzUoL5IMtOeG-bQ1v8rJGlQbNtgvMdDALjZXI/edit?usp=drivesdk
