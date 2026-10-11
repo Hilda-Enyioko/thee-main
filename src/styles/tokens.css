@@ -1,22 +1,22 @@
 :root {
-  /* color — light mode */
+  /* color  -  light mode */
   --ink: #F4F7FC;           /* page background, was near-black, now bright */
   --deep-blue: #FFFFFF;     /* card/panel surface, was dark, now white */
-  --azure: #2F6FED;         /* primary action — unchanged, still the brand anchor */
-  --azure-bright: #1B54D6;  /* hover/emphasis — darkened since it now sits on white, not black */
-  --mist: #080B10;          /* secondary text — darkened for contrast on light bg */
-  --paper: #0B1F3A;         /* primary text — was light-on-dark, now dark-on-light (reuses deep blue) */
+  --azure: #2F6FED;         /* primary action  -  unchanged, still the brand anchor */
+  --azure-bright: #1B54D6;  /* hover/emphasis  -  darkened since it now sits on white, not black */
+  --mist: #080B10;          /* secondary text  -  darkened for contrast on light bg */
+  --paper: #0B1F3A;         /* primary text  -  was light-on-dark, now dark-on-light (reuses deep blue) */
 
   /* borders/shadows now need a dark-alpha base instead of white-alpha */
   --line-rgb: 11, 31, 58;   /* use in rgba(var(--line-rgb), 0.08) etc. instead of rgba(255,255,255,0.08) */
   --shadow: 0 2px 12px rgba(11, 31, 58, 0.06);
 
-  /* type — unchanged */
+  /* type  -  unchanged */
   --font-display: 'Space Grotesk', sans-serif;
   --font-body: 'Inter', sans-serif;
   --font-mono: 'IBM Plex Mono', monospace;
 
-  /* scale — unchanged */
+  /* scale  -  unchanged */
   --radius: 6px;
   --space-1: 4px;
   --space-2: 8px;

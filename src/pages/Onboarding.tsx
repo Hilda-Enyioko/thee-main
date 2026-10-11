@@ -251,7 +251,7 @@ export default function Onboarding() {
             <div className="verify-line" />
             <h1>Your account is created.</h1>
             <p>
-              Here's your API key — you'll need it later for server-to-server requests once your
+              Here's your API key  -  you'll need it later for server-to-server requests once your
               account is verified. <strong>Copy it now; you won't be able to see it again.</strong>
             </p>
 
