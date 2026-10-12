@@ -1,5 +1,8 @@
 from django.contrib import admin
-from .models import DistributorProfile, Partner, ProviderProfile, Webhook, WebhookEvent
+from .models import (
+    DistributorProfile, IdempotencyRecord, Partner, ProviderProfile,
+    Webhook, WebhookEvent
+)
 
 
 @admin.register(Partner)
@@ -40,3 +43,11 @@ class WebhookAdmin(admin.ModelAdmin):
 class WebhookEventAdmin(admin.ModelAdmin):
     list_display = ("webhook", "event", "created_at")
     search_fields = ("webhook__partner__name", "event")
+
+
+@admin.register(IdempotencyRecord)
+class IdempotencyRecordAdmin(admin.ModelAdmin):
+    list_display = ("partner", "endpoint", "key", "response_code", "created_at")
+    search_fields = ("partner__name", "endpoint", "key")
+    list_filter = ("response_code", "endpoint")
+    readonly_fields = ("id", "partner", "endpoint", "key", "request_hash", "response_code", "response_body", "created_at")
