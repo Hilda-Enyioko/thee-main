@@ -1,6 +1,6 @@
 import uuid
 from django.db import models
-from accounts.models import CustomerProfile
+from accounts.models import Customer
 from plans.models import InsurancePlan
 from core.models import Partner
 from core.storage import KYCDocumentStorage
@@ -24,9 +24,9 @@ class PolicySubscription(models.Model):
         default=uuid.uuid4, editable=False
     )
 
-    customer: models.ForeignKey = models.ForeignKey(
-        CustomerProfile,
-        on_delete=models.CASCADE,
+    customer = models.ForeignKey(
+        Customer,
+        on_delete=models.PROTECT,
         related_name="subscriptions",
         db_index=True,
     )

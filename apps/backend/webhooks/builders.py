@@ -1,25 +1,24 @@
 def _core(claim):
-    user = claim.customer.user
+    c = claim.customer
     return {
         "claim_id": str(claim.id),
         "claim_reference": claim.claim_reference,
         "claim_type": claim.claim_type,
         "status": claim.status,
-        "customer": {"id": str(claim.customer_id), "email": user.email,
-                     "first_name": user.first_name},
+        "customer": {"id": str(c.id), "external_id": c.external_id,
+                     "email": c.email, "first_name": c.first_name},
         "provider": {"id": str(claim.provider_id), "name": claim.provider.name,
                      "admin_emails": list(claim.provider.admins
                          .filter(user__is_active=True)
                          .values_list("user__email", flat=True))},
     }
 
-
 def _payment(p):
     return {
         "reference": p.reference,
         "amount": str(p.amount),
         "status": p.status,
-        "nomba_reference": p.nomba_reference,
+        "gateway_reference": p.gateway_reference,
         "failure_reason": p.failure_reason,
     }
 

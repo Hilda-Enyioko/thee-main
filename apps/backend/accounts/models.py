@@ -234,37 +234,6 @@ class PartnerAdmin(models.Model):
         return f"{self.user.email} — {self.partner.name} ({self.role})"
 
 
-# Customer Profile ----------------------------------------------------------------------
-
-class CustomerProfile(SettlementDetails):
-    """Siloed demographic metadata block matching a user to a transactional partner."""
-
-    GENDER_CHOICES = [
-        ("male", "Male"),
-        ("female", "Female"),
-        ("other", "Other"),
-    ]
-
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(
-        CustomUser, on_delete=models.CASCADE, related_name="customer_profiles"
-    )
-    partner = models.ForeignKey(
-        Partner, on_delete=models.CASCADE, related_name="legacy_customer_profiles"
-    )
-    phone_number = models.CharField(max_length=20)
-    date_of_birth = models.DateField(null=True)
-    gender = models.CharField(max_length=10, choices=GENDER_CHOICES)
-    address = models.TextField()
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        unique_together = ["user", "partner"]
-
-    def __str__(self):
-        return f"{self.user.email} — {self.partner.name}"
-
-
 # Customer (Partner-Scoped) -------------------------------------------------------------
 
 class Customer(SettlementDetails):
@@ -299,7 +268,7 @@ class Customer(SettlementDetails):
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)
     # email is optional at the model level for distributor workflows where emails may be unavailable
-    email = models.EmailField(db_index=True, blank=True)
+    email = models.EmailField(db_index=True) 
     phone_number = models.CharField(max_length=30, blank=True)
     date_of_birth = models.DateField(null=True, blank=True)
     gender = models.CharField(max_length=10, choices=GENDER_CHOICES, blank=True)
@@ -427,49 +396,6 @@ class CustomerConsentLog(models.Model):
     def __str__(self):
         ref = self.customer_external_id or (self.customer.external_id if self.customer else "Unknown")
         return f"Consent for {ref} @ {self.created_at:%Y-%m-%d %H:%M}"
-
-
-# KYC -----------------------------------------------------------------------------------
-
-class CustomerKYC(models.Model):
-    """Identity tracking and verification data linked directly to a customer profile."""
-
-    ID_TYPE_CHOICES = [
-        ("nin", "National Identity Number"),
-        ("bvn", "Bank Verification Number"),
-        ("passport", "International Passport"),
-        ("drivers_licence", "Driver's Licence"),
-        ("voters_card", "Voter's Card"),
-    ]
-
-    STATUS_CHOICES = [
-        ("pending", "Pending Review"),
-        ("approved", "Approved"),
-        ("rejected", "Rejected"),
-    ]
-
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    customer = models.OneToOneField(
-        CustomerProfile, on_delete=models.CASCADE, related_name="kyc"
-    )
-    id_type = models.CharField(max_length=20, choices=ID_TYPE_CHOICES)
-    id_number = models.CharField(max_length=50)
-    id_document = models.FileField(
-        upload_to="kyc/customers/id/",
-        storage=KYCDocumentStorage(),
-    )
-    selfie = models.FileField(
-        upload_to="kyc/customers/selfie/",
-        blank=True,
-        storage=KYCDocumentStorage(),
-    )
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
-    review_note = models.TextField(blank=True)
-    submitted_at = models.DateTimeField(auto_now_add=True)
-    reviewed_at = models.DateTimeField(null=True, blank=True)
-
-    def __str__(self):
-        return f"{self.customer.user.email} — {self.id_type} ({self.status})"
 
 
 class PartnerKYC(models.Model):

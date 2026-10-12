@@ -2,7 +2,7 @@ import uuid
 import secrets
 from django.db import models
 from subscriptions.models import PolicySubscription
-from accounts.models import CustomerProfile, PartnerAdmin
+from accounts.models import Customer, PartnerAdmin
 from core.models import Partner
 from core.storage import KYCDocumentStorage
 
@@ -40,9 +40,9 @@ class Claim(models.Model):
         related_name="claims"
     )
     customer = models.ForeignKey(
-        CustomerProfile,
-        on_delete=models.CASCADE,
-        related_name="claims"
+        Customer,
+        on_delete=models.PROTECT,
+        related_name="claims",
     )
     provider = models.ForeignKey(
         Partner,

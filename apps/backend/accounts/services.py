@@ -4,7 +4,7 @@ from django.utils import timezone
 from accounts import emails
 from webhooks.events import E
 from webhooks.services import emit
-from .models import CustomerKYC, PartnerKYC
+from .models import PartnerKYC
 
 
 class KYCReviewError(Exception):
@@ -41,19 +41,4 @@ def review_partner_kyc(kyc_pk, *, approve, note="", reviewer_email):
         emails.on_commit_send(emails.send_kyc_approved, partner)
     else:
         emails.on_commit_send(emails.send_kyc_rejected, partner, note)
-    return kyc
-
-
-@transaction.atomic
-def review_customer_kyc(kyc_pk, *, approve, note="", reviewer_email=""):
-    note = (note or "").strip()
-    kyc = CustomerKYC.objects.select_for_update().select_related("customer__user").get(pk=kyc_pk)
-    _guard(kyc, approve, note)
-
-    kyc.status = "approved" if approve else "rejected"
-    kyc.review_note, kyc.reviewed_at = note, timezone.now()
-    kyc.save()
-
-    user = kyc.customer.user
-    emails.on_commit_send(emails.send_customer_kyc_decision, user.email, user.first_name, approve, note)
     return kyc

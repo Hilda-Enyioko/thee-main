@@ -38,16 +38,15 @@ from webhooks.events import E
 from webhooks.services import emit
 
 from .models import (
-    CustomerKYC, CustomerProfile, CustomUser, PartnerAdmin, PartnerKYC,
+    CustomUser, PartnerAdmin, PartnerKYC,
     ServiceAccountCredential, Staff, StaffLoginEvent,
 )
 from .serializers import (
-    CustomerKYCSerializer, CustomerRegistrationSerializer, LoginSerializer,
+    LoginSerializer,
     PartnerKYCSerializer, PartnerMeSerializer, PartnerOnboardingSerializer,
     PartnerPasswordConfirmSerializer, PartnerProfileSerializer,
     PartnerProfileUpdateSerializer, PartnerTeamInviteSerializer,
     PartnerTeamMemberSerializer, StaffCreateSerializer, StaffSerializer,
-    CustomerProfileUpdateSerializer, CustomerProfileSerializer,
 )
 
 
@@ -65,13 +64,6 @@ def _client_meta(request):
         "ip_address": request.META.get("REMOTE_ADDR"),
         "user_agent": request.META.get("HTTP_USER_AGENT", "")[:255],
     }
-
-
-def _customer_kyc_status(user, partner):
-    if user.role != "customer" or partner is None:
-        return None
-    kyc = CustomerKYC.objects.filter(customer__user=user, customer__partner=partner).first()
-    return kyc.status if kyc else "not_submitted"
 
 
 # ================================================================ 1. PARTNERS
@@ -447,160 +439,6 @@ class TokenRefreshView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_401_UNAUTHORIZED)
 
 
-# ================================================================ 4. CUSTOMERS
-class CustomerRegisterView(APIView):
-    permission_classes = [AllowAny]
-    throttle_classes = [IPRateThrottle]
-
-    @extend_schema(
-        summary="Register a customer",
-        description="Requires the `X-Partner-Key` header of the provider/distributor the customer is signing up through. "
-                    "The customer is bound to that partner and can then browse its plans.",
-        auth=[{"PartnerKey": []}],
-        request=CustomerRegistrationSerializer,
-        responses={
-            201: inline_serializer("CustomerRegisterResponse", {"message": s.CharField(), "tokens": TokenPairSerializer}),
-            400: validation_error("email", "An account with this email already exists."),
-            401: error("Missing/invalid/inactive X-Partner-Key.", "Invalid or inactive partner key.", key="detail"),
-        },
-        examples=[OpenApiExample("Request", request_only=True, value={
-            "email": "chidi@example.com", "password": "S3curePassw0rd!", "first_name": "Chidi", "last_name": "Eze",
-            "phone_number": "+2348031234567", "date_of_birth": "1994-03-21", "gender": "male",
-            "address": "7 Admiralty Way, Lekki, Lagos"}),
-            OpenApiExample("Created", response_only=True, status_codes=["201"],
-                           value={"message": "Registration successful.", "tokens": SAMPLE_TOKENS})],
-        tags=[Tag.CUSTOMERS],
-    )
-    def post(self, request):
-        serializer = CustomerRegistrationSerializer(data=request.data, context={"partner": request.partner})
-        serializer.is_valid(raise_exception=True)
-        user = serializer.save()
-        return Response({"message": "Registration successful.",
-                         "tokens": generate_tokens(user, partner_id=request.partner.id)},
-                        status=status.HTTP_201_CREATED)
-
-
-class CustomerKYCView(APIView):
-    permission_classes = [IsCustomer]
-    throttle_classes = [PartnerRateThrottle]
-
-    def _profile(self, request):
-        return request.user.customer_profiles.filter(partner=request.partner).first()
-
-    @extend_schema(
-        summary="Submit customer KYC",
-        description=(
-            "`multipart/form-data`. `id_type`: `nin` | `bvn` | `passport` | `drivers_licence` | `voters_card`. "
-            "`selfie` is optional. Until KYC is **approved** the customer can browse plans but cannot subscribe. "
-            "A **rejected** KYC can be resubmitted."
-        ),
-        auth=PARTNER_KEY_AUTH,
-        request={"multipart/form-data": CustomerKYCSerializer},
-        responses={201: MessageSerializer, 400: validation_error("id_document", "No file was submitted."),
-                   404: error("Customer profile not found for this partner.", "Customer profile not found."),
-                   409: error("KYC pending or approved.", "KYC is already pending.")},
-        examples=[OpenApiExample("Created", response_only=True, status_codes=["201"],
-                                 value={"message": "KYC submitted successfully. It will be reviewed shortly."})],
-        tags=[Tag.CUSTOMERS],
-    )
-    def post(self, request):
-        profile = self._profile(request)
-        if profile is None:
-            return Response({"error": "Customer profile not found."}, status=status.HTTP_404_NOT_FOUND)
-        existing = getattr(profile, "kyc", None)
-        if existing and existing.status != "rejected":
-            return Response({"error": f"KYC is already {existing.status}."}, status=status.HTTP_409_CONFLICT)
-        serializer = CustomerKYCSerializer(instance=existing, data=request.data)
-        serializer.is_valid(raise_exception=True)
-        if existing:
-            serializer.save(status="pending", review_note="", reviewed_at=None)
-        else:
-            serializer.save(customer=profile)
-        return Response({"message": "KYC submitted successfully. It will be reviewed shortly."},
-                        status=status.HTTP_201_CREATED)
-
-    @extend_schema(
-        summary="Get my KYC",
-        auth=PARTNER_KEY_AUTH,
-        responses={200: CustomerKYCSerializer,
-                   404: error("Profile or KYC not found.", "No KYC submitted yet.")},
-        examples=[OpenApiExample("Rejected", response_only=True, status_codes=["200"], value={
-            "id_type": "nin", "id_number": "12345678901", "status": "rejected",
-            "review_note": "ID photo is blurry. Please re-upload.",
-            "submitted_at": "2026-10-06T10:00:00Z", "reviewed_at": "2026-10-06T14:30:00Z"})],
-        tags=[Tag.CUSTOMERS],
-    )
-    def get(self, request):
-        profile = self._profile(request)
-        if profile is None:
-            return Response({"error": "Customer profile not found."}, status=status.HTTP_404_NOT_FOUND)
-        if not hasattr(profile, "kyc"):
-            return Response({"error": "No KYC submitted yet."}, status=status.HTTP_404_NOT_FOUND)
-        return Response(CustomerKYCSerializer(profile.kyc).data)
-
-
-CUSTOMER_PROFILE_EXAMPLE = {
-    "id": "0d5c7c1e-61f2-4a6b-9a3e-5b1c2f9e8a10", "email": "chidi@example.com",
-    "first_name": "Chidi", "last_name": "Eze", "phone_number": "+2348031234567",
-    "date_of_birth": "1994-03-21", "gender": "male", "address": "7 Admiralty Way, Lekki, Lagos",
-    "settlement": {"account_name": "Chidi Eze", "account_number": "0123456789", "bank_code": "058"},
-    "settlement_complete": True,
-}
-
-
-class CustomerProfileView(APIView):
-    permission_classes = [IsCustomer]
-    throttle_classes = [PartnerRateThrottle]
-
-    def _profile(self, request):
-        return request.user.customer_profiles.filter(partner=request.partner).select_related("user").first()
-
-    @extend_schema(
-        summary="Get my profile",
-        description="Returns the customer's profile for the partner in `X-Partner-Key`, including the settlement "
-                    "account used for claim payouts. `settlement_complete` tells the app whether to prompt for it.",
-        auth=PARTNER_KEY_AUTH,
-        responses={200: CustomerProfileSerializer,
-                   404: error("Customer profile not found for this partner.", "Customer profile not found.")},
-        examples=[OpenApiExample("OK", response_only=True, status_codes=["200"], value=CUSTOMER_PROFILE_EXAMPLE)],
-        tags=[Tag.CUSTOMERS],
-    )
-    def get(self, request):
-        profile = self._profile(request)
-        if profile is None:
-            return Response({"error": "Customer profile not found."}, status=status.HTTP_404_NOT_FOUND)
-        return Response(CustomerProfileSerializer(profile).data)
-
-    @extend_schema(
-        summary="Update my profile / settlement account",
-        description=(
-            "Partial update. Editable: `phone_number`, `address`, `settlement` "
-            "(`account_name`, `account_number` = 10-digit NUBAN, `bank_code`).\n\n"
-            "`settlement` is all-or-nothing: send all three fields together.\n\n"
-            "**Claims flow:** call this right after `POST /claims/` if the response had `settlement_on_file: false`. "
-            "A provider cannot approve a claim until this is filled. The account is snapshotted onto the payout "
-            "at approval time, so later edits do not affect an approved claim."
-        ),
-        auth=PARTNER_KEY_AUTH,
-        request=CustomerProfileUpdateSerializer,
-        responses={200: CustomerProfileSerializer,
-                   400: validation_error("settlement", "account_name, account_number and bank_code must be provided together."),
-                   404: error("Customer profile not found for this partner.", "Customer profile not found.")},
-        examples=[OpenApiExample("Add settlement account", request_only=True, value={
-                      "settlement": {"account_name": "Chidi Eze", "account_number": "0123456789", "bank_code": "058"}}),
-                  OpenApiExample("Updated", response_only=True, status_codes=["200"], value=CUSTOMER_PROFILE_EXAMPLE)],
-        tags=[Tag.CUSTOMERS],
-    )
-    def patch(self, request):
-        profile = self._profile(request)
-        if profile is None:
-            return Response({"error": "Customer profile not found."}, status=status.HTTP_404_NOT_FOUND)
-        serializer = CustomerProfileUpdateSerializer(profile, data=request.data, partial=True)
-        serializer.is_valid(raise_exception=True)
-        profile = serializer.save()
-        return Response(CustomerProfileSerializer(profile).data)
-
-
 # ================================================================ 5. STAFF
 class StaffLoginView(APIView):
     permission_classes = [AllowAny]
@@ -780,53 +618,6 @@ class StaffPartnerKYCReviewView(APIView):
         return Response({"message": f"Partner KYC {kyc.status}.", "partner": kyc.partner.name,
                         "is_active": kyc.partner.is_active})
 
-class StaffCustomerKYCReviewView(APIView):
-    """NEW: nothing could approve customer KYC before, so no customer could ever subscribe."""
-    permission_classes = [IsStaffMember]
-    throttle_classes = [PartnerRateThrottle]
-
-    @extend_schema(
-        operation_id="staff_kyc_customers_list",
-        summary="List customer KYC submissions",
-        parameters=[OpenApiParameter("status", OpenApiTypes.STR, OpenApiParameter.QUERY, enum=["pending", "approved", "rejected"])],
-        responses={200: OpenApiResponse(response=OpenApiTypes.OBJECT, description="Submissions.", examples=[OpenApiExample("List", value={
-            "kyc_submissions": [{"id": "9b1d6c0e-1a2b-4c3d-8e9f-0a1b2c3d4e5f", "customer_email": "chidi@example.com",
-                                 "partner_name": "QuickCover Ltd", "id_type": "nin", "status": "pending",
-                                 "submitted_at": "2026-10-06T10:00:00Z"}]})])},
-        tags=[Tag.STAFF],
-    )
-    def get(self, request):
-        qs = (CustomerKYC.objects.filter(status=request.query_params.get("status", "pending"))
-              .select_related("customer__user", "customer__partner"))
-        return Response({"kyc_submissions": [{
-            "id": str(k.id), "customer_email": k.customer.user.email, "partner_name": k.customer.partner.name,
-            "id_type": k.id_type, "status": k.status, "submitted_at": k.submitted_at} for k in qs]})
-
-    @extend_schema(
-        operation_id="staff_kyc_customers_partial_update",
-        summary="Approve or reject customer KYC",
-        parameters=[OpenApiParameter("kyc_id", OpenApiTypes.UUID, OpenApiParameter.PATH)],
-        request=inline_serializer("CustomerKYCReviewRequest", {"action": s.ChoiceField(["approve", "reject"]),
-                                                               "note": s.CharField(required=False)}),
-        responses={200: MessageSerializer, 400: error("Bad action / note missing.", "A note is required when rejecting."),
-                   404: error("Not found.", "KYC not found."), 409: error("Already reviewed.", "KYC has already been approved.")},
-        examples=[OpenApiExample("Reject", request_only=True, value={"action": "reject", "note": "ID photo is blurry."}),
-                  OpenApiExample("OK", response_only=True, status_codes=["200"], value={"message": "Customer KYC approved."})],
-        tags=[Tag.STAFF],
-    )
-    def patch(self, request, kyc_id):
-        if not CustomerKYC.objects.filter(id=kyc_id).exists():
-            return Response({"error": "KYC not found."}, status=status.HTTP_404_NOT_FOUND)
-        action = request.data.get("action")
-        if action not in ("approve", "reject"):
-            return Response({"error": "Action must be 'approve' or 'reject'."}, status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            kyc = review_customer_kyc(kyc_id, approve=action == "approve", note=request.data.get("note", ""))
-        except KYCReviewError as e:
-            return Response({"error": str(e)}, status=e.status_code)
-
-        return Response({"message": f"Customer KYC {kyc.status}."})
 
 # ---- Service accounts
 class StaffServiceAccountCreateView(APIView):

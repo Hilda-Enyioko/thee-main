@@ -1,6 +1,5 @@
 from rest_framework.permissions import BasePermission
 from rest_framework.exceptions import PermissionDenied
-from .models import CustomerKYC
 
 
 class IsStaffMember(BasePermission):
@@ -59,25 +58,6 @@ class IsCustomer(BasePermission):
             and request.user.is_authenticated
             and request.user.role == "customer"
         )
-
-
-class IsKYCVerifiedCustomer(IsCustomer):
-    """Customers may browse plans without KYC, but can only purchase with APPROVED KYC."""
-
-    def has_permission(self, request, view):
-        if not super().has_permission(request, view):
-            return False
-        kyc = CustomerKYC.objects.filter(
-            customer__user=request.user, customer__partner=getattr(request, "partner", None)
-        ).first()
-        status_ = kyc.status if kyc else "not_submitted"
-        if status_ != "approved":
-            raise PermissionDenied({
-                "error": "Complete KYC verification before purchasing a plan.",
-                "code": "kyc_required",
-                "kyc_status": status_,
-            })
-        return True
 
 
 class IsProviderAdmin(BasePermission):
@@ -163,3 +143,10 @@ class IsCustomerOfPartner(BasePermission):
             profile = getattr(user, "partner_admin_profile", None)
             return bool(profile and profile.partner_id == partner.id)
         return False
+
+
+class IsPartnerKey(BasePermission):
+    """Request authenticated by X-Partner-Key (middleware already checked the key and KYC-active status)."""
+    message = "A valid X-Partner-Key is required."
+    def has_permission(self, request, view):
+        return getattr(request, "partner", None) is not None

@@ -278,7 +278,6 @@ SPECTACULAR_SETTINGS = {
         # Models / Enums where field name is "status"
         "PolicySubscriptionStatusEnum": "subscriptions.models.PolicySubscription.STATUS_CHOICES",  # or your actual enum path
         "PartnerKYCStatusEnum": "accounts.models.PartnerKYC.STATUS_CHOICES",
-        "CustomerKYCStatusEnum": "accounts.models.CustomerKYC.STATUS_CHOICES",
         "DistributorAccessGrantStatusEnum": "plans.models.DistributorAccessGrant.STATUS_CHOICES",
         "TransactionStatusEnum": "payments.models.Transaction.PAYMENT_STATUS",
 

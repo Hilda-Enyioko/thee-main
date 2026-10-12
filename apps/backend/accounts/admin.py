@@ -2,8 +2,8 @@ from django import forms
 from django.contrib import admin, messages
 from django.utils.html import format_html
 
-from .models import CustomerKYC, PartnerKYC, CustomerConsentLog
-from .services import KYCReviewError, review_customer_kyc, review_partner_kyc
+from .models import PartnerKYC, CustomerConsentLog
+from .services import KYCReviewError, review_partner_kyc
 
 REVIEWER_ROLES = ("super_admin", "support_admin")
 

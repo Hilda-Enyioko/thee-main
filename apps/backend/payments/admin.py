@@ -24,7 +24,7 @@ class TransactionAdmin(admin.ModelAdmin):
         'currency',
         'payment_status',
         'payment_type',
-        'initiated_by',
+        'initiated_by_partner',
         'subscription',
         'created_at',
     ]
@@ -39,7 +39,7 @@ class TransactionAdmin(admin.ModelAdmin):
     search_fields = [
         'reference',
         'gateway_reference',
-        'initiated_by__email',
+        'initiated_by_partner__email',
         'subscription__id',
     ]
 
@@ -53,7 +53,7 @@ class TransactionAdmin(admin.ModelAdmin):
         'gateway_reference',
         'gateway_response',
         'subscription',
-        'initiated_by',
+        'initiated_by_partner',
         'created_at',
         'updated_at',
     ]
@@ -66,7 +66,7 @@ class TransactionAdmin(admin.ModelAdmin):
             'fields': ('amount', 'currency', 'payment_type', 'payment_status')
         }),
         (_('Relationships'), {
-            'fields': ('subscription', 'initiated_by')
+            'fields': ('subscription', 'initiated_by_partner')
         }),
         (_('Gateway Response'), {
             'fields': ('gateway_response',),
