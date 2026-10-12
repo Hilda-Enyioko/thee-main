@@ -5,8 +5,10 @@ def _core(claim):
         "claim_reference": claim.claim_reference,
         "claim_type": claim.claim_type,
         "status": claim.status,
-        "customer": {"id": str(c.id), "external_id": c.external_id,
-                     "email": c.email, "first_name": c.first_name},
+        "subscription_id": str(claim.subscription_id),
+        "customer": {"id": str(c.id), "external_id": c.external_id, "email": c.email,
+                     "first_name": c.first_name, "last_name": c.last_name,
+                     "kyc_status": c.kyc_status},
         "provider": {"id": str(claim.provider_id), "name": claim.provider.name,
                      "admin_emails": list(claim.provider.admins
                          .filter(user__is_active=True)

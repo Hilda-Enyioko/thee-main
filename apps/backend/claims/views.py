@@ -7,9 +7,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.emails import on_commit_send
-from accounts.permissions import IsCustomer, IsHumanStaff, IsProviderAdmin, IsSuperAdmin
+from accounts.permissions import IsHumanStaff, IsProviderAdmin, IsSuperAdmin
 from accounts.utils import get_partner_from_user
+from core.api import IDEMPOTENCY_HEADER, PartnerKeyAPIView, idempotency_key
 from core.docs import PARTNER_KEY_AUTH, Tag, error, validation_error
+from core.idempotency import process_idempotent_request
 from core.throttles import PartnerRateThrottle
 from webhooks import builders as b
 from webhooks.events import E
@@ -17,9 +19,9 @@ from webhooks.services import emit
 
 from . import emails as claim_emails
 from .docs import (AI_RESULT_EXAMPLE, CLAIM_CREATED_201, CLAIM_EXAMPLE, CLAIM_STAFF_EXAMPLE,
-                   CREATE_REQ_EXAMPLE, DOC_EXAMPLE, PAYMENT_EXAMPLE)
+                   CREATE_REQ_EXAMPLE, DOC_EXAMPLE)
 from .models import Claim, ClaimDocument, ClaimPayment, REQUIRED_CLAIM_DOCUMENTS
-from .serializers import (ClaimCreateSerializer, ClaimCustomerSerializer, ClaimDocumentSerializer,
+from .serializers import (ClaimCreateSerializer, ClaimDocumentSerializer, ClaimPartnerSerializer,
                           ClaimReviewSerializer, ClaimSerializer)
 from .settlement import start_claim_payout
 
@@ -31,69 +33,93 @@ STAFF_TRANSITIONS = {
     "ai_check_pending": {"forwarded", "flagged"},   # manual override if AI is down
 }
 
-NO_PROFILE = "Customer profile not found."
 SETTLEMENT_MISSING = {
-    "error": "The customer has no settlement account on file. Request more information so they can add one.",
+    "error": "The customer has no settlement account on file. Request more information so the partner can add one.",
     "code": "customer_settlement_missing",
 }
 
 CLAIM_ID = OpenApiParameter("claim_id", OpenApiTypes.UUID, OpenApiParameter.PATH, description="Claim UUID.")
 STATUS_PARAM = OpenApiParameter("status", OpenApiTypes.STR, OpenApiParameter.QUERY, required=False,
                                 enum=[c[0] for c in Claim.STATUS_CHOICES], description="Filter by workflow status.")
-ClaimListCustomer = inline_serializer("CustomerClaimList", {"claims": ClaimCustomerSerializer(many=True)})
+CUSTOMER_PARAM = OpenApiParameter("customer_external_id", OpenApiTypes.STR, OpenApiParameter.QUERY, required=False,
+                                  description="Only this customer's claims. Omit for all of yours.")
+PAGE_PARAMS = [OpenApiParameter("page", OpenApiTypes.INT, OpenApiParameter.QUERY, required=False),
+               OpenApiParameter("page_size", OpenApiTypes.INT, OpenApiParameter.QUERY, required=False,
+                                description="Max 100.")]
+
+ClaimListPartner = inline_serializer("PartnerClaimList", {
+    "count": s.IntegerField(), "page": s.IntegerField(), "page_size": s.IntegerField(),
+    "claims": ClaimPartnerSerializer(many=True)})
 ClaimListFull = inline_serializer("ClaimList", {"claims": ClaimSerializer(many=True)})
 ReviewResponse = inline_serializer("ClaimReviewResponse", {
     "message": s.CharField(), "claim_reference": s.CharField(), "status": s.CharField()})
 
 
 def _claims():
-    return (Claim.objects.select_related("customer__user", "provider", "subscription__plan")
+    return (Claim.objects.select_related("customer", "provider", "subscription__plan")
             .prefetch_related("documents", "payments"))
 
 
-def _customer_profile(request):
-    return request.user.customer_profiles.filter(partner=request.partner).first()
+def _partner_claims(request):
+    """Claims of THIS partner's customers only. Anything else is a 404 to the caller."""
+    return _claims().filter(customer__partner=request.partner)
 
 
-# ============================================================ CUSTOMER
-class CustomerClaimListCreateView(APIView):
-    permission_classes = [IsCustomer]
-    throttle_classes = [PartnerRateThrottle]
+def _locked_partner_claim(request, claim_id):
+    # of=("self",): the customer__partner filter joins Customer; don't lock those rows too.
+    return (Claim.objects.select_for_update(of=("self",))
+            .filter(id=claim_id, customer__partner=request.partner).first())
 
+
+def _page(request, qs, serializer_cls, key):
+    try:
+        page = max(int(request.query_params.get("page", 1)), 1)
+        size = min(max(int(request.query_params.get("page_size", 20)), 1), 100)
+    except ValueError:
+        raise s.ValidationError({"page": ["page and page_size must be integers."]})
+    items = qs[(page - 1) * size: page * size]
+    return Response({"count": qs.count(), "page": page, "page_size": size,
+                     key: serializer_cls(items, many=True).data})
+
+
+# ============================================================ PARTNER (X-Partner-Key)
+class ClaimListCreateView(PartnerKeyAPIView):
     @extend_schema(
-        operation_id="customer_claims_list",
-        summary="List my claims",
-        description="All claims the customer has filed with the partner in `X-Partner-Key`, newest first. "
+        operation_id="claims_list",
+        summary="List claims for my customers",
+        description="Claims filed under your `X-Partner-Key`, newest first. Add `customer_external_id` for one customer. "
                     "Includes `documents`, `payments` (masked account, receipt link) and `settlement_on_file`.",
         auth=PARTNER_KEY_AUTH,
-        parameters=[STATUS_PARAM],
-        responses={200: ClaimListCustomer, 404: error("Customer profile not found for this partner.", NO_PROFILE)},
-        examples=[OpenApiExample("OK", response_only=True, status_codes=["200"], value={"claims": [CLAIM_EXAMPLE]})],
+        parameters=[CUSTOMER_PARAM, STATUS_PARAM, *PAGE_PARAMS],
+        responses={200: ClaimListPartner},
+        examples=[OpenApiExample("OK", response_only=True, status_codes=["200"], value={
+            "count": 1, "page": 1, "page_size": 20, "claims": [CLAIM_EXAMPLE]})],
         tags=[Tag.CLAIMS],
     )
     def get(self, request):
-        profile = _customer_profile(request)
-        if profile is None:
-            return Response({"error": NO_PROFILE}, status=404)
-        qs = _claims().filter(customer=profile).order_by("-submitted_at")
-        if request.query_params.get("status"):
-            qs = qs.filter(status=request.query_params["status"])
-        return Response({"claims": ClaimCustomerSerializer(qs, many=True).data})
+        qs = _partner_claims(request).order_by("-submitted_at", "id")
+        if v := request.query_params.get("customer_external_id"):
+            qs = qs.filter(customer__external_id=v)
+        if v := request.query_params.get("status"):
+            qs = qs.filter(status=v)
+        return _page(request, qs, ClaimPartnerSerializer, "claims")
 
     @extend_schema(
-        summary="Submit a claim",
+        operation_id="claims_create",
+        summary="File a claim for a customer",
         description=(
-            "**Step 1 of the claims flow.** Files a claim against one of the customer's `active` subscriptions. "
+            "**Step 1 of the claims flow.** Files a claim against one of your customers' `active` subscriptions. "
             "The claim starts as `submitted`.\n\n"
-            "Validation: the subscription must belong to the caller, `claim_type` must match the plan category "
+            "Validation: the subscription must be one sold under your key, `claim_type` must match the plan category "
             "(motor vs travel), and `incident_date` must be within the coverage period and not in the future.\n\n"
-            "**What the app does next**\n"
+            "**What to do next**\n"
             "1. Upload every file in `required_documents` via `next_steps.upload_documents`.\n"
-            "2. If `settlement_on_file` is `false`, collect bank details and call `PATCH /auth/profile/`. "
-            "A provider cannot approve the claim without them.\n\n"
-            "Once the last required document is uploaded the claim moves to `ai_check_pending` automatically."
-        ),
+            "2. If `settlement_on_file` is `false`, send the customer's bank details with "
+            "`PUT /customers/{external_id}/` (`settlement` object). A provider cannot approve the claim without them.\n\n"
+            "Once the last required document is uploaded the claim moves to `ai_check_pending` automatically.\n\n"
+            "Safe to retry: send an `Idempotency-Key`."),
         auth=PARTNER_KEY_AUTH,
+        parameters=[IDEMPOTENCY_HEADER],
         request=ClaimCreateSerializer,
         responses={
             201: inline_serializer("ClaimCreated", {
@@ -101,76 +127,70 @@ class CustomerClaimListCreateView(APIView):
                 "required_documents": s.ListField(child=s.CharField()), "settlement_on_file": s.BooleanField(),
                 "next_steps": s.DictField(child=s.CharField(allow_null=True))}),
             400: validation_error("claim_type", "This claim type is not valid for motor insurance."),
-            404: error("Customer profile not found for this partner.", NO_PROFILE),
+            409: error("Idempotency key reused with a different body.",
+                       "Idempotency key reused with different request payload."),
         },
         examples=[OpenApiExample("Request", request_only=True, value=CREATE_REQ_EXAMPLE),
                   OpenApiExample("Created", response_only=True, status_codes=["201"], value=CLAIM_CREATED_201)],
         tags=[Tag.CLAIMS],
     )
     def post(self, request):
-        profile = _customer_profile(request)
-        if profile is None:
-            return Response({"error": NO_PROFILE}, status=404)
-
-        serializer = ClaimCreateSerializer(data=request.data, context={"profile": profile})
+        serializer = ClaimCreateSerializer(data=request.data, context={"partner": request.partner})
         serializer.is_valid(raise_exception=True)
         d = serializer.validated_data
-        sub = d["subscription"]
 
-        with transaction.atomic():
-            claim = Claim.objects.create(
-                subscription=sub, customer=profile, provider=sub.provider, claim_type=d["claim_type"],
-                incident_date=d["incident_date"], incident_description=d["incident_description"],
-                claimed_amount=d["claimed_amount"], status="submitted")
-            emit(E.CLAIM_SUBMITTED, partner=claim.provider, aggregate_id=claim.id, data=b.claim_submitted(claim))
+        def run():
+            sub = d["subscription"]
+            customer = sub.customer
+            with transaction.atomic():
+                claim = Claim.objects.create(
+                    subscription=sub, customer=customer, provider=sub.provider, claim_type=d["claim_type"],
+                    incident_date=d["incident_date"], incident_description=d["incident_description"],
+                    claimed_amount=d["claimed_amount"], status="submitted")
+                emit(E.CLAIM_SUBMITTED, partner=claim.provider, aggregate_id=claim.id,
+                     data=b.claim_submitted(claim))
+            return Response({
+                "message": "Claim submitted. Please upload supporting documents.",
+                "claim_id": str(claim.id),
+                "claim_reference": claim.claim_reference,
+                "required_documents": REQUIRED_CLAIM_DOCUMENTS.get(claim.claim_type, []),
+                "settlement_on_file": customer.has_settlement,
+                "next_steps": {
+                    "upload_documents": f"POST /api/v1/claims/{claim.id}/documents/",
+                    "add_settlement_account": None if customer.has_settlement else
+                        f"PUT /api/v1/customers/{customer.external_id}/ with a `settlement` object",
+                },
+            }, status=201)
 
-        return Response({
-            "message": "Claim submitted. Please upload supporting documents.",
-            "claim_id": str(claim.id),
-            "claim_reference": claim.claim_reference,
-            "required_documents": REQUIRED_CLAIM_DOCUMENTS.get(claim.claim_type, []),
-            "settlement_on_file": profile.has_settlement,
-            "next_steps": {
-                "upload_documents": f"POST /api/v1/claims/{claim.id}/documents/",
-                "add_settlement_account": None if profile.has_settlement else "PATCH /api/v1/auth/profile/",
-            },
-        }, status=201)
+        return process_idempotent_request(request.partner, request, idempotency_key(request), request.data, run)
 
 
-class CustomerClaimDetailView(APIView):
-    permission_classes = [IsCustomer]
-    throttle_classes = [PartnerRateThrottle]
-
+class ClaimDetailView(PartnerKeyAPIView):
     @extend_schema(
-        operation_id="customer_claims_retrieve",
+        operation_id="claims_retrieve",
         summary="Get a claim",
-        description="Single claim owned by the caller. Another customer's claim returns 404, never 403.",
+        description="A single claim of one of your customers. Another partner's claim returns 404, never 403.",
         auth=PARTNER_KEY_AUTH,
         parameters=[CLAIM_ID],
-        responses={200: ClaimCustomerSerializer,
-                   404: error("Claim not found, or customer profile missing.", "Claim not found.")},
+        responses={200: ClaimPartnerSerializer,
+                   404: error("Claim not found, or not one of your customers' claims.", "Claim not found.")},
         examples=[OpenApiExample("OK", response_only=True, status_codes=["200"], value=CLAIM_EXAMPLE)],
         tags=[Tag.CLAIMS],
     )
     def get(self, request, claim_id):
-        profile = _customer_profile(request)
-        if profile is None:
-            return Response({"error": NO_PROFILE}, status=404)
-        claim = _claims().filter(id=claim_id, customer=profile).first()
+        claim = _partner_claims(request).filter(id=claim_id).first()
         if claim is None:
             return Response({"error": "Claim not found."}, status=404)
-        return Response(ClaimCustomerSerializer(claim).data)
+        return Response(ClaimPartnerSerializer(claim).data)
 
 
-class ClaimDocumentUploadView(APIView):
-    permission_classes = [IsCustomer]
-    throttle_classes = [PartnerRateThrottle]
-
+class ClaimDocumentUploadView(PartnerKeyAPIView):
     @extend_schema(
+        operation_id="claims_documents_upload",
         summary="Upload a claim document",
         description=(
             "`multipart/form-data`. One call per document. Uploading the same `document_type` again "
-            "**replaces** the earlier file.\n\n"
+            "**replaces** the earlier file, so retries are safe.\n\n"
             "Allowed while the claim is `submitted` or `more_info_required`; otherwise 409. "
             "`document_type` must be one of the claim type's `required_documents`.\n\n"
             "**When the last required document arrives for a `submitted` claim** it moves to "
@@ -187,7 +207,7 @@ class ClaimDocumentUploadView(APIView):
                 "all_documents_uploaded": s.BooleanField()}),
             400: error("Missing field, invalid type, or type not required for this claim.",
                        "This document is not required. Required: ['claim_form', 'medical_report']"),
-            404: error("Claim not found or profile missing.", "Claim not found."),
+            404: error("Claim not found.", "Claim not found."),
             409: error("Claim is not accepting documents.", "Claim in 'forwarded' is no longer accepting documents."),
         },
         examples=[OpenApiExample("Partial", response_only=True, status_codes=["200"], value={
@@ -200,10 +220,6 @@ class ClaimDocumentUploadView(APIView):
         tags=[Tag.CLAIMS],
     )
     def post(self, request, claim_id):
-        profile = _customer_profile(request)
-        if profile is None:
-            return Response({"error": NO_PROFILE}, status=404)
-
         document_type, file = request.data.get("document_type"), request.FILES.get("file")
         if not document_type:
             return Response({"error": "document_type is required."}, status=400)
@@ -214,7 +230,7 @@ class ClaimDocumentUploadView(APIView):
             return Response({"error": f"Invalid document type. Valid types: {valid_types}"}, status=400)
 
         with transaction.atomic():
-            claim = Claim.objects.select_for_update().filter(id=claim_id, customer=profile).first()
+            claim = _locked_partner_claim(request, claim_id)
             if claim is None:
                 return Response({"error": "Claim not found."}, status=404)
             if claim.status not in DOC_UPLOAD_STATUSES:
@@ -238,6 +254,7 @@ class ClaimDocumentUploadView(APIView):
                          "missing_documents": missing, "all_documents_uploaded": not missing})
 
     @extend_schema(
+        operation_id="claims_documents_list",
         summary="Claim document checklist",
         description="Required, uploaded and still-missing documents for this claim.",
         auth=PARTNER_KEY_AUTH,
@@ -247,17 +264,14 @@ class ClaimDocumentUploadView(APIView):
                 "required_documents": s.ListField(child=s.CharField()),
                 "uploaded_documents": ClaimDocumentSerializer(many=True),
                 "missing_documents": s.ListField(child=s.CharField())}),
-            404: error("Claim not found or profile missing.", "Claim not found.")},
+            404: error("Claim not found.", "Claim not found.")},
         examples=[OpenApiExample("OK", response_only=True, status_codes=["200"], value={
             "required_documents": ["claim_form", "flight_documents"], "uploaded_documents": [DOC_EXAMPLE],
             "missing_documents": ["flight_documents"]})],
         tags=[Tag.CLAIMS],
     )
     def get(self, request, claim_id):
-        profile = _customer_profile(request)
-        if profile is None:
-            return Response({"error": NO_PROFILE}, status=404)
-        claim = Claim.objects.filter(id=claim_id, customer=profile).first()
+        claim = Claim.objects.filter(id=claim_id, customer__partner=request.partner).first()
         if claim is None:
             return Response({"error": "Claim not found."}, status=404)
         required = REQUIRED_CLAIM_DOCUMENTS.get(claim.claim_type, [])
@@ -268,11 +282,9 @@ class ClaimDocumentUploadView(APIView):
                          "missing_documents": [d for d in required if d not in have]})
 
 
-class ClaimResubmitView(APIView):
-    permission_classes = [IsCustomer]
-    throttle_classes = [PartnerRateThrottle]
-
+class ClaimResubmitView(PartnerKeyAPIView):
     @extend_schema(
+        operation_id="claims_resubmit",
         summary="Resubmit a claim after a request for more information",
         description=(
             "Call after uploading what the reviewer asked for. Requires status `more_info_required` and every "
@@ -292,17 +304,15 @@ class ClaimResubmitView(APIView):
         tags=[Tag.CLAIMS],
     )
     def post(self, request, claim_id):
-        profile = _customer_profile(request)
-        if profile is None:
-            return Response({"error": NO_PROFILE}, status=404)
         with transaction.atomic():
-            claim = Claim.objects.select_for_update().filter(id=claim_id, customer=profile).first()
+            claim = _locked_partner_claim(request, claim_id)
             if claim is None:
                 return Response({"error": "Claim not found."}, status=404)
             if claim.status != "more_info_required":
                 return Response({"error": f"Claim in '{claim.status}' is not awaiting more information."}, status=409)
             required = REQUIRED_CLAIM_DOCUMENTS.get(claim.claim_type, [])
-            missing = [d for d in required if d not in set(claim.documents.values_list("document_type", flat=True))]
+            have = set(claim.documents.values_list("document_type", flat=True))
+            missing = [d for d in required if d not in have]
             if missing:
                 return Response({"error": f"Missing documents: {missing}"}, status=400)
 
@@ -320,7 +330,7 @@ class ClaimResubmitView(APIView):
                          "status": claim.status})
 
 
-# ============================================================ PROVIDER
+# ============================================================ PROVIDER (JWT)
 class ProviderClaimListView(APIView):
     permission_classes = [IsProviderAdmin]
     throttle_classes = [PartnerRateThrottle]
@@ -330,7 +340,7 @@ class ProviderClaimListView(APIView):
         summary="List claims for my plans",
         description="JWT only (no `X-Partner-Key`). Providers only see claims that have cleared the AI/staff gate "
                     "(`forwarded_at` set), never `submitted`, `ai_check_pending` or unreviewed `flagged` claims. "
-                    "Includes `ai_result`.",
+                    "Includes `ai_result` and the partner's KYC attestation for the customer.",
         parameters=[STATUS_PARAM,
                     OpenApiParameter("claim_type", OpenApiTypes.STR, OpenApiParameter.QUERY, required=False,
                                      enum=[c[0] for c in Claim.CLAIM_TYPE_CHOICES])],
@@ -375,9 +385,9 @@ class ProviderClaimReviewView(APIView):
             "- **approved**: requires `approved_amount` (≤ `claimed_amount`) and a customer settlement account on file "
             "(else 409 `customer_settlement_missing`). The payout starts automatically to the customer's account; "
             "when Nomba confirms, the claim becomes `paid`.\n"
-            "- **rejected / more_info_required**: `review_note` is required and is shown to the customer.\n\n"
-            "**Emails:** the customer is emailed for every decision; the distributor (if the claim came through one) "
-            "gets an FYI on approve and reject."
+            "- **rejected / more_info_required**: `review_note` is required and is relayed to the customer.\n\n"
+            "**Emails:** the customer is emailed for every decision; the partner that filed the claim is emailed when "
+            "more information is needed, and gets an FYI on approve and reject if it is a distributor."
         ),
         parameters=[CLAIM_ID],
         request=ClaimReviewSerializer,
@@ -397,9 +407,8 @@ class ProviderClaimReviewView(APIView):
                       "status": "more_info_required", "review_note": "Please upload a clearer police report."}),
                   OpenApiExample("OK", response_only=True, status_codes=["200"], value={
                       "message": "Claim approved.", "claim_reference": "CLM-9F3A1B7C2D4E5F60", "status": "approved"}),
-                  OpenApiExample("No settlement account", response_only=True, status_codes=["409"], value={
-                      "error": "The customer has no settlement account on file. Request more information so they can add one.",
-                      "code": "customer_settlement_missing"})],
+                  OpenApiExample("No settlement account", response_only=True, status_codes=["409"],
+                                 value=SETTLEMENT_MISSING)],
         tags=[Tag.CLAIMS],
     )
     def patch(self, request, claim_id):
@@ -539,9 +548,9 @@ class StaffClaimReviewView(APIView):
             "Allowed transitions:\n"
             "- `flagged` → `forwarded` | `rejected` | `more_info_required`\n"
             "- `ai_check_pending` → `forwarded` | `flagged` (manual override when the AI service is down)\n\n"
-            "`review_note` is required for `rejected` / `more_info_required` and **is shown to the customer**.\n\n"
+            "`review_note` is required for `rejected` / `more_info_required` and **is relayed to the customer**.\n\n"
             "**Emails:** `forwarded` notifies the provider (and distributor FYI); `rejected` / `more_info_required` "
-            "notify the customer."
+            "notify the customer, and `more_info_required` also notifies the partner that filed the claim."
         ),
         parameters=[CLAIM_ID],
         request=ClaimReviewSerializer,
@@ -591,3 +600,4 @@ class StaffClaimReviewView(APIView):
 
         return Response({"message": f"Claim updated to {claim.status}.",
                          "claim_reference": claim.claim_reference, "status": claim.status})
+    

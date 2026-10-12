@@ -31,16 +31,21 @@ class ClaimPaymentSerializer(serializers.ModelSerializer):
         return f"******{obj.account_number[-4:]}" if obj.account_number else ""
 
 
-class ClaimPaymentCustomerSerializer(ClaimPaymentSerializer):
-    """Gateway failure text is internal, so customers don't get it."""
+class ClaimPaymentPartnerSerializer(ClaimPaymentSerializer):
+    """Gateway failure text is internal, so partners don't get it."""
     class Meta(ClaimPaymentSerializer.Meta):
         fields = [f for f in ClaimPaymentSerializer.Meta.fields if f != "failure_reason"]
         read_only_fields = fields
 
 
 class ClaimSerializer(serializers.ModelSerializer):
-    """Full view for providers and TheeInsurance staff (includes `ai_result`)."""
-    customer_email = serializers.EmailField(source="customer.user.email", read_only=True)
+    """Full view for providers and TheeInsurance staff (includes `ai_result` and the partner's KYC attestation)."""
+    customer_external_id = serializers.CharField(source="customer.external_id", read_only=True)
+    customer_name = serializers.SerializerMethodField()
+    customer_email = serializers.EmailField(source="customer.email", read_only=True)
+    customer_kyc_status = serializers.CharField(
+        source="customer.kyc_status", read_only=True,
+        help_text="The distributor's own KYC attestation for this customer. TheeInsurance does not verify it.")
     provider_name = serializers.CharField(source="provider.name", read_only=True)
     plan_name = serializers.CharField(source="subscription.plan.name", read_only=True)
     settlement_on_file = serializers.BooleanField(
@@ -52,7 +57,8 @@ class ClaimSerializer(serializers.ModelSerializer):
     class Meta:
         model = Claim
         fields = [
-            "id", "claim_reference", "subscription", "plan_name", "customer", "customer_email",
+            "id", "claim_reference", "subscription", "plan_name",
+            "customer", "customer_external_id", "customer_name", "customer_email", "customer_kyc_status",
             "provider", "provider_name", "claim_type", "incident_date", "incident_description",
             "claimed_amount", "approved_amount", "status", "forwarded_at",
             "theeinsurance_review_note", "provider_review_note", "settlement_on_file",
@@ -60,21 +66,26 @@ class ClaimSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_customer_name(self, obj):
+        return f"{obj.customer.first_name} {obj.customer.last_name}".strip()
 
-class ClaimCustomerSerializer(ClaimSerializer):
+
+class ClaimPartnerSerializer(ClaimSerializer):
     """
-    Customer view: no `ai_result` (fraud signals stay internal).
-    Review notes ARE shown, so reviewers should write them for the customer.
+    Partner (X-Partner-Key) view: no `ai_result` (fraud signals stay internal), no internal timestamps.
+    Review notes ARE shown, so reviewers should write them knowing the partner relays them to the customer.
     """
-    payments = ClaimPaymentCustomerSerializer(many=True, read_only=True)
+    payments = ClaimPaymentPartnerSerializer(many=True, read_only=True)
 
     class Meta(ClaimSerializer.Meta):
-        fields = [f for f in ClaimSerializer.Meta.fields if f not in ("ai_result", "parties_notified_at")]
+        fields = [f for f in ClaimSerializer.Meta.fields
+                  if f not in ("ai_result", "parties_notified_at", "customer_kyc_status")]
         read_only_fields = fields
 
 
 class ClaimCreateSerializer(serializers.Serializer):
-    """Requires `context={"profile": CustomerProfile}` so a customer can only claim on their own policies."""
+    """Requires `context={"partner": Partner}` so a partner can only claim on subscriptions sold to its own customers."""
     subscription_id = serializers.UUIDField()
     claim_type = serializers.ChoiceField(choices=Claim.CLAIM_TYPE_CHOICES)
     incident_date = serializers.DateField()
@@ -90,8 +101,9 @@ class ClaimCreateSerializer(serializers.Serializer):
         return value
 
     def validate(self, attrs):
-        sub = (PolicySubscription.objects.select_related("plan__category", "provider")
-               .filter(id=attrs["subscription_id"], customer=self.context["profile"], status="active").first())
+        sub = (PolicySubscription.objects.select_related("customer", "plan__category", "provider")
+               .filter(id=attrs["subscription_id"], customer__partner=self.context["partner"],
+                       status="active").first())
         if sub is None:
             raise serializers.ValidationError({"subscription_id": "Active subscription not found."})
 
@@ -112,7 +124,7 @@ class ClaimCreateSerializer(serializers.Serializer):
 
 class ClaimReviewSerializer(serializers.Serializer):
     """
-    Used by TheeInsurance staff and provider admins. The note is shown to the customer,
+    Used by TheeInsurance staff and provider admins. The note is relayed to the customer,
     and is mandatory when rejecting or asking for more information.
     """
     status = serializers.ChoiceField(choices=[c[0] for c in Claim.STATUS_CHOICES])
