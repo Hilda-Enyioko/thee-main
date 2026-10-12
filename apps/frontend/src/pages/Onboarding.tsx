@@ -90,10 +90,10 @@ export default function Onboarding() {
 
       setApiKey(response.data.api_key);
       setStep(2);
-    } catch (err: any) {
-      const apiErrors = err.response?.data;
+    } catch (err: unknown) {
+      const apiErrors = (err as { response?: { data?: unknown } }).response?.data;
       if (apiErrors && typeof apiErrors === 'object') {
-        setErrors(apiErrors);
+        setErrors(apiErrors as Record<string, string>);
       } else {
         setErrors({ general: 'Something went wrong. Please try again.' });
       }
@@ -112,16 +112,18 @@ export default function Onboarding() {
     <div className="onboarding">
       <SiteNav />
 
-      <div className="onboarding-card">
-        <div className="stepper">
+      <main className="onboarding-shell">
+        <section className="onboarding-card" aria-label="Create your TheeInsurance account">
+          <p className="onboarding-overline">Partner onboarding</p>
+          <div className="stepper" aria-label={`Step ${step} of 2`}>
           <div className={`stepper-item ${step >= 1 ? 'active' : ''}`}>
-            <span className="stepper-index">01</span>
-            <span>Business details</span>
+            <span className="stepper-index">1</span>
+            <span>Account details</span>
           </div>
           <div className={`stepper-line ${step >= 2 ? 'filled' : ''}`} />
           <div className={`stepper-item ${step >= 2 ? 'active' : ''}`}>
-            <span className="stepper-index">02</span>
-            <span>Account created</span>
+            <span className="stepper-index">2</span>
+            <span>All set</span>
           </div>
         </div>
 
@@ -271,7 +273,14 @@ export default function Onboarding() {
             </button>
           </div>
         )}
-      </div>
+        </section>
+        <aside className="onboarding-visual" aria-label="TheeInsurance partner network">
+          <div className="visual-topline"><span>THEEINSURANCE</span><span>01 — 02</span></div>
+          <div className="visual-copy"><p>One connected layer</p><h2>Make protection<br />move <em>further.</em></h2><span>Built for providers and distributors shaping the next era of insurance.</span></div>
+          <div className="network-orbit" aria-hidden="true"><div className="orbit orbit-outer" /><div className="orbit orbit-mid" /><div className="orbit orbit-inner" /><div className="network-core"><img src="/theeinsurance-mark.jpg" alt="" /></div><i className="network-node node-a">+</i><i className="network-node node-b">↗</i><i className="network-node node-c">✓</i><i className="network-node node-d">◎</i></div>
+          <div className="visual-footer"><span>Secure partner access</span><span>NG / 2026</span></div>
+        </aside>
+      </main>
       <SiteFooter />
     </div>
   );
