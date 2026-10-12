@@ -1,7 +1,7 @@
 from django.urls import path
 from .views import (
-    CustomerClaimListCreateView,
-    CustomerClaimDetailView,
+    ClaimListCreateView,
+    ClaimDetailView,
     ClaimDocumentUploadView,
     ProviderClaimListView,
     ProviderClaimReviewView,
@@ -11,8 +11,8 @@ from .views import (
 
 urlpatterns = [
     # customer
-    path("claims/", CustomerClaimListCreateView.as_view(), name="claim-list-create"),
-    path("claims/<uuid:claim_id>/", CustomerClaimDetailView.as_view(), name="claim-detail"),
+    path("claims/", ClaimListCreateView.as_view(), name="claim-list-create"),
+    path("claims/<uuid:claim_id>/", ClaimDetailView.as_view(), name="claim-detail"),
     path("claims/<uuid:claim_id>/documents/", ClaimDocumentUploadView.as_view(), name="claim-documents"),
 
     # provider

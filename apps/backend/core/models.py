@@ -195,3 +195,32 @@ class ServiceWebhookEndpoint(models.Model):
 
     def __str__(self):
         return f"{self.service_account.email} → {self.event} → {self.url}"
+
+
+class IdempotencyRecord(models.Model):
+    """
+    Stores cached API responses for idempotent partner requests keyed by
+    (partner, endpoint, key) with a payload hash.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    partner = models.ForeignKey(
+        Partner, on_delete=models.CASCADE, related_name="idempotency_records"
+    )
+    endpoint = models.CharField(max_length=255, db_index=True)
+    key = models.CharField(max_length=255, db_index=True)
+    request_hash = models.CharField(max_length=64)
+    response_code = models.IntegerField()
+    response_body = models.JSONField()
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["partner", "endpoint", "key"],
+                name="unique_partner_endpoint_idempotency_key",
+            )
+        ]
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.partner.name}:{self.endpoint}:{self.key} [{self.response_code}]"

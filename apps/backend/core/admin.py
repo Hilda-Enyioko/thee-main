@@ -1,5 +1,8 @@
 from django.contrib import admin
-from .models import DistributorProfile, Partner, ProviderProfile, Webhook, WebhookEvent
+from .models import (
+    DistributorProfile, IdempotencyRecord, Partner, ProviderProfile,
+    Webhook, WebhookEvent
+)
 
 
 @admin.register(Partner)
@@ -8,6 +11,7 @@ class PartnerModelAdmin(admin.ModelAdmin):
     list_filter = ("is_active", "partner_type")
     search_fields = ("name", "slug")
     readonly_fields = ("id", "api_key_hash", "created_at")
+    list_select_related = ("kyc",)
 
     def has_add_permission(self, request):   # partners must come through /partner/onboard/ (key + profile + admin user)
         return False
@@ -40,3 +44,17 @@ class WebhookAdmin(admin.ModelAdmin):
 class WebhookEventAdmin(admin.ModelAdmin):
     list_display = ("webhook", "event", "created_at")
     search_fields = ("webhook__partner__name", "event")
+
+
+@admin.register(IdempotencyRecord)
+class IdempotencyRecordAdmin(admin.ModelAdmin):
+    list_display = ("partner", "endpoint", "key", "response_code", "created_at")
+    search_fields = ("partner__name", "endpoint", "key")
+    list_filter = ("response_code", "endpoint")
+    readonly_fields = ("id", "partner", "endpoint", "key", "request_hash", "response_code", "response_body", "created_at")
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False

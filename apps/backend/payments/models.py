@@ -74,11 +74,10 @@ class Transaction(models.Model):
         default='NGN'
     )
     
-    initiated_by: models.ForeignKey = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        null=True,
-        related_name='initiated_transactions'
+    initiated_by_partner = models.ForeignKey(
+      "core.Partner", on_delete=models.SET_NULL, null=True, blank=True,
+      related_name="initiated_transactions",
+      help_text="Partner whose X-Partner-Key started this payment (audit trail).",
     )
     
     subscription: models.ForeignKey = models.ForeignKey(

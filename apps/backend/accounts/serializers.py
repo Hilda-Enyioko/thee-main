@@ -8,105 +8,7 @@ from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from core.models import DistributorProfile, Partner, ProviderProfile
-from .models import CustomUser, CustomerKYC, CustomerProfile, PartnerAdmin, PartnerKYC, Staff
-
-
-class CustomerRegistrationSerializer(serializers.ModelSerializer):
-    """
-    Handles registration details for creating a new customer profile.
-    """
-
-    password = serializers.CharField(
-        write_only=True, required=True, validators=[validate_password]
-    )
-    confirm_password = serializers.CharField(write_only=True, required=True)
-    phone_number = serializers.CharField(required=True)
-    date_of_birth = serializers.DateField(required=True)
-    gender = serializers.ChoiceField(
-        choices=CustomerProfile.GENDER_CHOICES, required=True
-    )
-    address = serializers.CharField(required=True)
-
-    class Meta:
-        """Metadata options for CustomerRegistrationSerializer."""
-        model = CustomUser
-        fields = [
-            "email",
-            "password",
-            "confirm_password",
-            "first_name",
-            "last_name",
-            "phone_number",
-            "date_of_birth",
-            "gender",
-            "address",
-        ]
-
-    def validate_email(self, value):
-        """
-        Verify that the email is unique within the context of the current partner platform.
-        """
-        if CustomUser.objects.filter(email=value).exists():
-            partner = self.context.get("partner")
-            user = CustomUser.objects.get(email=value)
-            if CustomerProfile.objects.filter(user=user, partner=partner).exists():
-                raise serializers.ValidationError(
-                    "An account with this email already exists on this platform."
-                )
-        return value
-
-    def validate(self, attrs):
-        """
-        Validate that the provided password and confirm_password fields match perfectly.
-        """
-        if attrs["password"] != attrs["confirm_password"]:
-            raise serializers.ValidationError(
-                {"password": "Passwords do not match."}
-            )
-        return attrs
-
-    def create(self, validated_data):
-        """
-        Creates a CustomUser instance along with its nested CustomerProfile.
-        """
-        phone_number = validated_data.pop("phone_number")
-        date_of_birth = validated_data.pop("date_of_birth")
-        gender = validated_data.pop("gender")
-        address = validated_data.pop("address")
-        validated_data.pop("confirm_password")
-
-        partner = self.context.get("partner")
-        email = validated_data["email"]
-
-        if CustomUser.objects.filter(email=email).exists():
-            user = CustomUser.objects.get(email=email)
-        else:
-            user = CustomUser.objects.create_user(
-                email=email,
-                password=validated_data["password"],
-                first_name=validated_data["first_name"],
-                last_name=validated_data["last_name"],
-                role="customer",
-            )
-
-        CustomerProfile.objects.create(
-            user=user,
-            partner=partner,
-            phone_number=phone_number,
-            date_of_birth=date_of_birth,
-            gender=gender,
-            address=address,
-        )
-
-        return user
-
-
-def _unique_slug(name):
-    base = slugify(name)[:40] or "partner"
-    slug, i = base, 2
-    while Partner.objects.filter(slug=slug).exists():
-        slug, i = f"{base}-{i}", i + 1
-    return slug
+from .models import CustomUser, PartnerAdmin, PartnerKYC, Staff
 
 class PartnerOnboardingSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=255)
@@ -344,26 +246,6 @@ class LoginSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True)
 
 
-class CustomerKYCSerializer(serializers.ModelSerializer):
-    """
-    Serializes KYC compliance metrics mapping to customers.
-    """
-
-    class Meta:
-        """Metadata rules for CustomerKYCSerializer."""
-        model = CustomerKYC
-        fields = [
-            "id",
-            "id_type",
-            "id_number",
-            "id_document",
-            "selfie",
-            "status",
-            "submitted_at",
-        ]
-        read_only_fields = ["id", "status", "submitted_at"]
-
-
 class PartnerKYCSerializer(serializers.ModelSerializer):
     """
     Serializes entity-level KYC verification documentation for businesses.
@@ -405,44 +287,3 @@ class PartnerPasswordConfirmSerializer(serializers.Serializer):
         if not user.check_password(value):
             raise serializers.ValidationError("Incorrect password.")
         return value
-
-
-class CustomerProfileSerializer(serializers.ModelSerializer):
-    email = serializers.EmailField(source="user.email", read_only=True)
-    first_name = serializers.CharField(source="user.first_name", read_only=True)
-    last_name = serializers.CharField(source="user.last_name", read_only=True)
-    settlement = serializers.SerializerMethodField()
-    settlement_complete = serializers.BooleanField(
-        source="has_settlement", read_only=True,
-        help_text="True when account name, number and bank code are all on file. Required before a claim can be approved.")
-
-    class Meta:
-        model = CustomerProfile
-        fields = ["id", "email", "first_name", "last_name", "phone_number", "date_of_birth",
-                  "gender", "address", "settlement", "settlement_complete"]
-        read_only_fields = fields
-
-    @extend_schema_field(SettlementSerializer)
-    def get_settlement(self, obj):
-        return SettlementSerializer(obj).data
-
-
-class CustomerProfileUpdateSerializer(serializers.Serializer):
-    phone_number = serializers.CharField(max_length=20, required=False)
-    address = serializers.CharField(required=False)
-    settlement = SettlementSerializer(required=False)
-
-    def validate_settlement(self, value):
-        needed = {"settlement_account_name", "settlement_bank_account", "settlement_bank_code"}
-        if needed - value.keys():
-            raise serializers.ValidationError(
-                "account_name, account_number and bank_code must be provided together.")
-        return value
-
-    @transaction.atomic
-    def update(self, profile, vd):
-        settlement = vd.pop("settlement", None) or {}
-        for k, v in {**vd, **settlement}.items():
-            setattr(profile, k, v)
-        profile.save()
-        return profile

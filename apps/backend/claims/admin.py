@@ -13,7 +13,7 @@ class ClaimAdmin(admin.ModelAdmin):
         "id", "claim_reference", "submitted_at", "updated_at"
     ]
     list_filter = ["status", "claim_type"]
-    search_fields = ["claim_reference", "customer__user__email"]
+    search_fields = ["claim_reference", "customer__email"]
 
 @admin.register(ClaimDocument)
 class ClaimDocumentAdmin(admin.ModelAdmin):

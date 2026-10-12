@@ -58,8 +58,13 @@ def verify_webhook_signature(raw_body: bytes, signature: str) -> None:
 
 def _call(method, path, **kwargs):
     try:
-        resp = requests.request(method, f"{settings.PAYSTACK_BASE_URL}{path}",
-                                headers=_headers(), timeout=30, **kwargs)
+        resp = requests.request(
+            method,
+            f"{settings.PAYSTACK_BASE_URL}{path}",
+            headers=_headers(),
+            timeout=30,
+            **kwargs,
+        )
         resp.raise_for_status()
         body = resp.json()
     except requests.Timeout:
@@ -72,15 +77,24 @@ def _call(method, path, **kwargs):
     return body["data"]
 
 
-def paystack_initialize(txn: Transaction, email: str, metadata: dict) -> dict:
-    return _call("POST", "/transaction/initialize", json={
-        "email": email,
-        "amount": _kobo(txn.amount),
-        "currency": txn.currency,
-        "reference": txn.reference,
-        "callback_url": settings.PAYSTACK_CALLBACK_URL,
-        "metadata": metadata,
-    })
+def paystack_initialize(
+    txn: Transaction,
+    email: str,
+    metadata: dict,
+    callback_url: str | None = None,
+) -> dict:
+    return _call(
+        "POST",
+        "/transaction/initialize",
+        json={
+            "email": email,
+            "amount": _kobo(txn.amount),
+            "currency": txn.currency,
+            "reference": txn.reference,
+            "callback_url": callback_url or settings.PAYSTACK_CALLBACK_URL,
+            "metadata": metadata,
+        },
+    )
 
 
 def paystack_verify(reference: str) -> dict:
@@ -99,7 +113,12 @@ def _checkout_payload(txn: Transaction) -> dict:
     }
 
 
-def initiate_checkout(sub: PolicySubscription, payment_type: str, user) -> dict:
+def initiate_checkout(
+    sub: PolicySubscription,
+    payment_type: str,
+    partner,
+    callback_url: str | None = None,
+) -> dict:
     """Create (or reuse) a PENDING transaction and return the Paystack checkout URL."""
     if payment_type == Transaction.PAYMENT_TYPE.NEW_SUBSCRIPTION:
         if sub.status != "pending_payment":
@@ -110,23 +129,40 @@ def initiate_checkout(sub: PolicySubscription, payment_type: str, user) -> dict:
     with db_transaction.atomic():
         locked = PolicySubscription.objects.select_for_update().get(pk=sub.pk)
         txn = Transaction.objects.filter(
-            subscription=locked, payment_type=payment_type,
-            payment_status=Transaction.PAYMENT_STATUS.PENDING).first()
+            subscription=locked,
+            payment_type=payment_type,
+            payment_status=Transaction.PAYMENT_STATUS.PENDING,
+        ).first()
         if txn:
             fresh = timezone.now() - txn.created_at < PENDING_TTL
             if fresh and txn.authorization_url:
                 return _checkout_payload(txn)
             if fresh:
                 raise NotPayable("A payment is already being set up. Try again in a moment.")
-            txn.payment_status = Transaction.PAYMENT_STATUS.FAILED   # stale; Paystack can still flip it later
+            txn.payment_status = Transaction.PAYMENT_STATUS.FAILED  # stale; Paystack can still flip it later
             txn.save(update_fields=["payment_status", "updated_at"])
+
         txn = Transaction.objects.create(
-            subscription=locked, initiated_by=user, amount=locked.amount_paid, currency="NGN",
-            payment_type=payment_type, gateway=Transaction.GATEWAY.PAYSTACK)
+            subscription=locked,
+            initiated_by_partner=partner,
+            amount=locked.amount_paid,
+            currency="NGN",
+            payment_type=payment_type,
+            gateway=Transaction.GATEWAY.PAYSTACK,
+        )
 
     try:
-        data = paystack_initialize(txn, user.email, {
-            "subscription_id": str(sub.id), "payment_type": payment_type, "plan": sub.plan.name})
+        data = paystack_initialize(
+            txn,
+            sub.customer.email,
+            {
+                "subscription_id": str(sub.id),
+                "payment_type": payment_type,
+                "plan": sub.plan.name,
+                "customer_external_id": sub.customer.external_id,
+            },
+            callback_url=callback_url,
+        )
     except GatewayError:
         txn.payment_status = Transaction.PAYMENT_STATUS.FAILED
         txn.save(update_fields=["payment_status", "updated_at"])
@@ -138,14 +174,19 @@ def initiate_checkout(sub: PolicySubscription, payment_type: str, user) -> dict:
     return _checkout_payload(txn)
 
 
-#  settle (webhook + verify both land here)
+# settle (webhook + verify both land here)
 def _log(reference, payload, status, txn, *, duplicate=False, mismatch=False):
     CallbackLog.objects.get_or_create(
         transaction_reference=reference,
         response_code=str(payload.get("status", ""))[:20],
         status=status,
-        defaults=dict(raw_payload=payload, transaction=txn, gateway=CallbackLog.Gateway.PAYSTACK,
-                      is_duplicate=duplicate, is_amount_mismatch=mismatch),
+        defaults=dict(
+            raw_payload=payload,
+            transaction=txn,
+            gateway=CallbackLog.Gateway.PAYSTACK,
+            is_duplicate=duplicate,
+            is_amount_mismatch=mismatch,
+        ),
     )
 
 
@@ -153,14 +194,22 @@ def _apply_success(txn: Transaction, sub: PolicySubscription) -> bool:
     today = timezone.localdate()
     if txn.payment_type == Transaction.PAYMENT_TYPE.NEW_SUBSCRIPTION:
         if sub.status != "pending_payment":
-            log.warning("Paid txn %s but subscription %s is '%s'. Manual refund review needed.",
-                        txn.reference, sub.id, sub.status)
+            log.warning(
+                "Paid txn %s but subscription %s is '%s'. Manual refund review needed.",
+                txn.reference,
+                sub.id,
+                sub.status,
+            )
             return False
         sub.payment_verified = True
     else:
         if sub.status not in RENEWABLE_STATUSES:
-            log.warning("Paid renewal %s but subscription %s is '%s'. Manual refund review needed.",
-                        txn.reference, sub.id, sub.status)
+            log.warning(
+                "Paid renewal %s but subscription %s is '%s'. Manual refund review needed.",
+                txn.reference,
+                sub.id,
+                sub.status,
+            )
             return False
         months = relativedelta(months=sub.plan.duration_months)
         if sub.end_date >= today:
@@ -181,6 +230,7 @@ def _fire_partner_webhooks(sub, event, payload):
                 dispatch_webhook(sub.distributor, event, payload)
         except Exception:
             log.exception("Partner webhook '%s' failed for subscription %s", event, sub.id)
+
     db_transaction.on_commit(_go)
 
 
@@ -206,30 +256,46 @@ def settle(reference: str, data: dict, source: str):
     if gw_status == "success":
         amount_ok = int(data.get("amount") or -1) == _kobo(txn.amount)
         if not amount_ok or data.get("currency", txn.currency) != txn.currency:
-            log.error("Amount/currency mismatch on %s: got %s %s", reference, data.get("amount"), data.get("currency"))
+            log.error(
+                "Amount/currency mismatch on %s: got %s %s",
+                reference,
+                data.get("amount"),
+                data.get("currency"),
+            )
             _log(reference, data, CallbackLog.Status.FLAGGED, txn, mismatch=True)
             return txn
 
-        txn.payment_status = Transaction.PAYMENT_STATUS.SUCCESSFUL   # also rescues a txn we had marked FAILED
+        txn.payment_status = Transaction.PAYMENT_STATUS.SUCCESSFUL  # also rescues a txn we had marked FAILED
         txn.gateway_reference = str(data.get("id", ""))[:100]
         txn.gateway_response = data
         txn.save(update_fields=["payment_status", "gateway_reference", "gateway_response", "updated_at"])
 
-        sub = (PolicySubscription.objects.select_for_update(of=("self",))
-               .select_related("plan", "provider", "distributor", "customer__user")
-               .get(pk=txn.subscription_id))
+        sub = (
+            PolicySubscription.objects.select_for_update(of=("self",))
+            .select_related("plan", "provider", "distributor", "customer")
+            .get(pk=txn.subscription_id)
+        )
         applied = _apply_success(txn, sub)
         _log(reference, data, CallbackLog.Status.SUCCESS if applied else CallbackLog.Status.FLAGGED, txn)
 
         if applied:
             renewal = txn.payment_type == Transaction.PAYMENT_TYPE.RENEWAL
-            _fire_partner_webhooks(sub, "subscription.renewed" if renewal else "subscription.created", {
-                "subscription_id": str(sub.id), "plan": sub.plan.name,
-                "customer_email": sub.customer.user.email,
-                "start_date": str(sub.start_date), "end_date": str(sub.end_date),
-                "amount_paid": str(sub.amount_paid), "status": "active",
-                "transaction_reference": txn.reference,
-            })
+            _fire_partner_webhooks(
+                sub,
+                "subscription.renewed" if renewal else "subscription.created",
+                {
+                    "subscription_id": str(sub.id),
+                    "plan": sub.plan.name,
+                    "customer_email": sub.customer.email,
+                    "customer_external_id": sub.customer.external_id,
+                    "customer_kyc_status": sub.customer.kyc_status,
+                    "start_date": str(sub.start_date),
+                    "end_date": str(sub.end_date),
+                    "amount_paid": str(sub.amount_paid),
+                    "status": "active",
+                    "transaction_reference": txn.reference,
+                },
+            )
             emails.on_commit_send(emails.send_payment_emails, txn.pk)
         return txn
 
@@ -238,5 +304,6 @@ def settle(reference: str, data: dict, source: str):
         txn.gateway_response = data
         txn.save(update_fields=["payment_status", "gateway_response", "updated_at"])
         _log(reference, data, CallbackLog.Status.FAILED, txn)
+
     # "abandoned" / "ongoing" / "pending": leave PENDING; the customer can still finish or retry
     return txn

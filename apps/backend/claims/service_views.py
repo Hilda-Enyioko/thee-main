@@ -144,9 +144,9 @@ class ServiceClaimDetailView(APIView):
     )
     def get(self, request, claim_id):
         claim = (Claim.objects
-                 .select_related("customer__user", "provider", "subscription__plan")
-                 .prefetch_related("documents", "payments")
-                 .filter(id=claim_id).first())
+         .select_related("customer", "provider", "subscription__plan")
+         .prefetch_related("documents", "payments")
+         .filter(id=claim_id).first())
         if claim is None:
             return Response({"error": "Claim not found."}, status=404)
         return Response(ClaimSerializer(claim).data)

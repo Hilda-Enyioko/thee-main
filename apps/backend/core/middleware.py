@@ -84,13 +84,22 @@ class PartnerScopeMiddleware:
                 status=401,
             )
 
-        try:
-            key_hash = Partner.hash_key(api_key)
-            request.partner = Partner.objects.get(api_key_hash=key_hash, is_active=True)
-        except Partner.DoesNotExist:
+        key_hash = Partner.hash_key(api_key)
+        partner = Partner.objects.filter(api_key_hash=key_hash).first()
+        if not partner:
             return JsonResponse(
-                {"error": "Invalid or inactive partner key."},
+                {"error": "Invalid partner key."},
                 status=401,
             )
 
+        if not partner.is_active:
+            return JsonResponse(
+                {
+                    "error": "Partner account must be KYC-approved and active to access this API.",
+                    "code": "partner_not_approved",
+                },
+                status=403,
+            )
+
+        request.partner = partner
         return self.get_response(request)

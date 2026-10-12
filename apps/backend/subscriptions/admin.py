@@ -12,7 +12,7 @@ class PolicySubscriptionAdmin(admin.ModelAdmin):
         "id", "created_at", "updated_at",
         "provider_payout", "distributor_commission", "platform_fee"
     ]
-    search_fields = ["customer__user__email", "plan__name", "payment_reference"]
+    search_fields = ["customer__email", "plan__name", "payment_reference"]
     list_filter = ["status", "payment_verified"]
     ordering = ["-created_at"]
 

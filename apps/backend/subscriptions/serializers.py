@@ -8,17 +8,36 @@ from .models import PolicySubscription
 from .rules import can_cancel, can_renew
 
 BASE_FIELDS = [
-    "id", "customer", "customer_email", "plan", "plan_name", "provider_name", "distributor_name",
-    "channel", "start_date", "end_date", "status", "amount_paid",
-    "payment_reference", "payment_verified", "created_at", "updated_at",
+    "id",
+    "customer",
+    "customer_external_id",
+    "customer_email",
+    "plan",
+    "plan_name",
+    "provider_name",
+    "distributor_name",
+    "channel",
+    "start_date",
+    "end_date",
+    "status",
+    "amount_paid",
+    "payment_reference",
+    "payment_verified",
+    "created_at",
+    "updated_at",
 ]
 
 
 class _Base(serializers.ModelSerializer):
+    customer_external_id = serializers.CharField(
+        source="customer.external_id", read_only=True
+    )
     plan_name = serializers.CharField(source="plan.name", read_only=True)
     provider_name = serializers.CharField(source="provider.name", read_only=True)
-    distributor_name = serializers.CharField(source="distributor.name", read_only=True, default=None)
-    customer_email = serializers.CharField(source="customer.user.email", read_only=True)
+    distributor_name = serializers.CharField(
+        source="distributor.name", read_only=True, default=None
+    )
+    customer_email = serializers.CharField(source="customer.email", read_only=True)
     channel = serializers.SerializerMethodField()
 
     class Meta:
@@ -34,6 +53,7 @@ class _Base(serializers.ModelSerializer):
 
 class PolicySubscriptionSerializer(_Base):
     """Customer view. No commission/payout figures."""
+
     can_renew = serializers.SerializerMethodField()
     can_cancel = serializers.SerializerMethodField()
 
@@ -64,14 +84,27 @@ class DistributorSubscriptionSerializer(_Base):
 
 class StaffSubscriptionSerializer(_Base):
     class Meta(_Base.Meta):
-        fields = BASE_FIELDS + ["provider", "distributor", "provider_payout",
-                                "distributor_commission", "platform_fee"]
+        fields = BASE_FIELDS + [
+            "provider",
+            "distributor",
+            "provider_payout",
+            "distributor_commission",
+            "platform_fee",
+        ]
         read_only_fields = fields
 
 
 class PolicySubscriptionCreateSerializer(serializers.Serializer):
-    plan_id = serializers.UUIDField(help_text="Must be a plan in the storefront of the partner whose X-Partner-Key is sent.")
-    start_date = serializers.DateField(help_text="Coverage start, YYYY-MM-DD. Cannot be in the past.")
+    customer_external_id = serializers.CharField(
+        max_length=255,
+        help_text="Your ID for the customer. Create them first with `PUT /customers/{external_id}/`.",
+    )
+    plan_id = serializers.UUIDField(
+        help_text="Must be a plan in the storefront of the partner whose X-Partner-Key is sent."
+    )
+    start_date = serializers.DateField(
+        help_text="Coverage start, YYYY-MM-DD. Cannot be in the past."
+    )
 
     def validate_start_date(self, value):
         if value < timezone.localdate():
@@ -79,9 +112,15 @@ class PolicySubscriptionCreateSerializer(serializers.Serializer):
         return value
 
     def validate(self, attrs):
-        plan = (plans_visible_to_partner(self.context["partner"])
-                .select_related("provider", "category").filter(id=attrs["plan_id"]).first())
-        if plan is None:   # same message for "doesn't exist" and "not yours" so IDs can't be probed
-            raise serializers.ValidationError({"plan_id": "Plan not found or not available on this platform."})
+        plan = (
+            plans_visible_to_partner(self.context["partner"])
+            .select_related("provider", "category")
+            .filter(id=attrs["plan_id"])
+            .first()
+        )
+        if plan is None:  # same message for "doesn't exist" and "not yours" so IDs can't be probed
+            raise serializers.ValidationError(
+                {"plan_id": "Plan not found or not available on this platform."}
+            )
         attrs["plan"] = plan
         return attrs

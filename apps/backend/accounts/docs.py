@@ -54,7 +54,4 @@ PROFILE_EXAMPLE = {
 LOGIN_EXAMPLES = [
     OpenApiExample("Partner admin", response_only=True, status_codes=["200"], value={
         "tokens": SAMPLE_TOKENS, "role": "partner_admin", "email": "ada@quickcover.ng", "first_name": "Ada"}),
-    OpenApiExample("Customer", response_only=True, status_codes=["200"], value={
-        "tokens": SAMPLE_TOKENS, "role": "customer", "email": "chidi@example.com",
-        "first_name": "Chidi", "kyc_status": "pending"}),
 ]
