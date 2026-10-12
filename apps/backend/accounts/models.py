@@ -308,7 +308,7 @@ class Customer(SettlementDetails):
         max_length=50, blank=True,
         help_text="e.g. nin, bvn, passport, drivers_licence, voters_card"
     )
-    # id_number should store encrypted cipher text (via Fernet helper in core.crypto)
+    # id_number stores encrypted cipher text (via Fernet helper in core.crypto)
     id_number = models.CharField(
         max_length=255,
         blank=True,
@@ -413,18 +413,15 @@ class CustomerConsentLog(models.Model):
         ordering = ["-created_at"]
 
     def save(self, *args, **kwargs):
-        # Enforce append-only semantics: reject updates to existing records
         if not self._state.adding:
             raise ValidationError("CustomerConsentLog records are immutable and cannot be updated.")
 
-        # Ensure denormalized external_id is captured if not explicitly supplied
         if self.customer and not self.customer_external_id:
             self.customer_external_id = self.customer.external_id
 
         super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
-        # Prevent row-level deletion
         raise ValidationError("CustomerConsentLog records cannot be deleted.")
 
     def __str__(self):
@@ -456,8 +453,7 @@ class CustomerKYC(models.Model):
         CustomerProfile, on_delete=models.CASCADE, related_name="kyc"
     )
     id_type = models.CharField(max_length=20, choices=ID_TYPE_CHOICES)
-    # Stored encrypted via Fernet helper
-    id_number = models.CharField(max_length=255, help_text="Encrypted identity number.")
+    id_number = models.CharField(max_length=50)
     id_document = models.FileField(
         upload_to="kyc/customers/id/",
         storage=KYCDocumentStorage(),

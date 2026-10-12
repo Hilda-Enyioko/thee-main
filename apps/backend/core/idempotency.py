@@ -117,22 +117,26 @@ def process_idempotent_request(
 
         response = execute_callable()
 
-       # Cache only successful responses (2xx) so client errors (4xx) can be fixed and retried safely
-        if 200 <= response.status_code < 300:
-            raw_data = getattr(response, "data", None)
-            response_body = (
-                json.loads(JSONRenderer().render(raw_data))
-                if raw_data is not None
-                else {}
-            )
+        # Non-2xx responses must leave no DB modifications behind
+        if not (200 <= response.status_code < 300):
+            transaction.set_rollback(True)
+            return response
 
-            IdempotencyRecord.objects.create(
-                partner=partner,
-                endpoint=scoped_endpoint,
-                key=key,
-                request_hash=request_hash,
-                response_code=response.status_code,
-                response_body=response_body,
-            )
+        # Cache successful response (2xx) and persist record
+        raw_data = getattr(response, "data", None)
+        response_body = (
+            json.loads(JSONRenderer().render(raw_data))
+            if raw_data is not None
+            else {}
+        )
+
+        IdempotencyRecord.objects.create(
+            partner=partner,
+            endpoint=scoped_endpoint,
+            key=key,
+            request_hash=request_hash,
+            response_code=response.status_code,
+            response_body=response_body,
+        )
 
         return response
