@@ -1,3 +1,8 @@
+"""
+Unified identity, partner tenancy, access control, and compliance models.
+Addresses NDPA consent auditing, immutable trails, and sensitive identity protection.
+"""
+
 import uuid
 import secrets
 from django.db import models
@@ -5,9 +10,9 @@ from django.core.exceptions import ValidationError
 from django.contrib.auth.hashers import make_password, check_password
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.utils import timezone
-from core.models import Partner
-from core.storage import KYCDocumentStorage
+
 from core.models import Partner, SettlementDetails
+from core.storage import KYCDocumentStorage
 
 
 # Custom User ------------------------------------------------------------------------
@@ -53,7 +58,7 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     id = models.UUIDField(
         primary_key=True,
         default=uuid.uuid4,
-        editable=False
+        editable=False,
     )
     email = models.EmailField(unique=True)
     first_name = models.CharField(max_length=100)
@@ -112,7 +117,7 @@ class Staff(CustomUser):
         on_delete=models.CASCADE,
         parent_link=True,
         primary_key=True,
-        related_name="staff_profile"
+        related_name="staff_profile",
     )
 
     created_by = models.ForeignKey(
@@ -130,7 +135,7 @@ class Staff(CustomUser):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name="staff_deactivated"
+        related_name="staff_deactivated",
     )
 
     objects = StaffManager()
@@ -146,7 +151,7 @@ class Staff(CustomUser):
         if by.role != "super_admin":
             raise ValidationError("Only a Super Admin can deactivate a staff account.")
         self.is_active = False
-        self.deactivated_at = timezone.now()  # Used timezone.now() to preserve Python type parity
+        self.deactivated_at = timezone.now()
         self.deactivated_by = by
         self.save(update_fields=["is_active", "deactivated_at", "deactivated_by"])
 
@@ -163,7 +168,7 @@ class StaffLoginEvent(models.Model):
     user_agent = models.CharField(max_length=255, blank=True)
     successful = models.BooleanField(default=True)
     failure_reason = models.CharField(max_length=255, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True, db_index=True)  # Indexed for log performance
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:
         ordering = ["-created_at"]
@@ -245,7 +250,7 @@ class CustomerProfile(SettlementDetails):
         CustomUser, on_delete=models.CASCADE, related_name="customer_profiles"
     )
     partner = models.ForeignKey(
-        Partner, on_delete=models.CASCADE, related_name="customers"
+        Partner, on_delete=models.CASCADE, related_name="legacy_customer_profiles"
     )
     phone_number = models.CharField(max_length=20)
     date_of_birth = models.DateField(null=True)
@@ -255,9 +260,177 @@ class CustomerProfile(SettlementDetails):
 
     class Meta:
         unique_together = ["user", "partner"]
-    
+
     def __str__(self):
         return f"{self.user.email} — {self.partner.name}"
+
+
+# Customer (Partner-Scoped) -------------------------------------------------------------
+
+class Customer(SettlementDetails):
+    """
+    Partner-scoped customer record, completely decoupled from Django auth users.
+    Identified and keyed uniquely by (partner, external_id).
+    Inherits SettlementDetails only if claim payouts route to the customer.
+    """
+
+    KYC_STATUS_CHOICES = [
+        ("verified", "Verified"),
+        ("unverified", "Unverified"),
+        ("not_provided", "Not Provided"),
+    ]
+
+    GENDER_CHOICES = [
+        ("male", "Male"),
+        ("female", "Female"),
+        ("other", "Other"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    partner = models.ForeignKey(
+        Partner, on_delete=models.CASCADE, related_name="customers"
+    )
+    external_id = models.CharField(
+        max_length=255, db_index=True,
+        help_text="Partner's own identifier for this customer."
+    )
+
+    # Core identity fields
+    first_name = models.CharField(max_length=100)
+    last_name = models.CharField(max_length=100)
+    # email is optional at the model level for distributor workflows where emails may be unavailable
+    email = models.EmailField(db_index=True, blank=True)
+    phone_number = models.CharField(max_length=30, blank=True)
+    date_of_birth = models.DateField(null=True, blank=True)
+    gender = models.CharField(max_length=10, choices=GENDER_CHOICES, blank=True)
+    address = models.TextField(blank=True)
+    id_type = models.CharField(
+        max_length=50, blank=True,
+        help_text="e.g. nin, bvn, passport, drivers_licence, voters_card"
+    )
+    # id_number should store encrypted cipher text (via Fernet helper in core.crypto)
+    id_number = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Encrypted NIN/BVN token. Must not be returned in plaintext API responses, logs, or webhooks."
+    )
+
+    # Flexible product-specific data
+    extra_data = models.JSONField(default=dict, blank=True)
+
+    # Partner KYC attestation (stored as given, TheeInsurance does not verify)
+    kyc_status = models.CharField(
+        max_length=20, choices=KYC_STATUS_CHOICES, default="not_provided",
+        help_text="Partner's claim regarding customer verification status. Stored as given; TheeInsurance does not verify it."
+    )
+    kyc_verified_by = models.CharField(max_length=255, blank=True, help_text="Partner organization/agent asserting verification.")
+    kyc_method = models.CharField(max_length=100, blank=True, help_text="Method used by partner (e.g. bvn_lookup, physical_id).")
+    kyc_verified_at = models.DateTimeField(null=True, blank=True, help_text="Timestamp when partner verified customer.")
+    kyc_reference = models.CharField(max_length=255, blank=True, help_text="Partner-side verification reference number.")
+
+    # Consent fields (NDPA compliance snapshot)
+    consent_obtained = models.BooleanField(
+        default=False,
+        help_text="True if partner has confirmed obtaining customer consent to process and share data."
+    )
+    consent_obtained_at = models.DateTimeField(null=True, blank=True)
+    consent_scope = models.CharField(
+        max_length=255,
+        default="TheeInsurance and relevant insurance provider",
+        help_text="Scope of data processing and sharing consent."
+    )
+    consent_reference = models.CharField(max_length=255, blank=True, help_text="Optional partner-side proof or reference ID.")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["partner", "external_id"],
+                name="unique_partner_customer_external_id",
+            )
+        ]
+        ordering = ["-created_at"]
+
+    @property
+    def full_name(self) -> str:
+        return f"{self.first_name} {self.last_name}".strip()
+
+    def __str__(self):
+        return f"{self.full_name} ({self.external_id}) — {self.partner.name}"
+
+
+# Immutable Customer Consent Log ------------------------------------------------------
+
+class CustomerConsentLogQuerySet(models.QuerySet):
+    """Enforces immutability at the QuerySet level to prevent bulk alterations/deletions."""
+
+    def update(self, **kwargs):
+        raise ValidationError("CustomerConsentLog records are immutable and cannot be updated.")
+
+    def delete(self):
+        raise ValidationError("CustomerConsentLog records are append-only audit entries and cannot be deleted.")
+
+
+class CustomerConsentLog(models.Model):
+    """
+    Immutable, append-only record tracking customer consent submissions and updates.
+    Customer foreign key uses SET_NULL alongside a denormalized customer_external_id
+    so audit trails survive customer deletion / NDPA erasure requests.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    customer = models.ForeignKey(
+        Customer,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="consent_logs",
+        help_text="SET_NULL retains the audit line if the customer record is deleted under NDPA erasure."
+    )
+    customer_external_id = models.CharField(
+        max_length=255,
+        db_index=True,
+        help_text="Denormalized identifier preserving the audit subject if Customer is removed."
+    )
+    partner = models.ForeignKey(
+        Partner,
+        on_delete=models.PROTECT,
+        related_name="customer_consent_logs",
+        help_text="Partner reference is protected to prevent orphaned regulatory audit trails."
+    )
+    consent_obtained = models.BooleanField()
+    consent_obtained_at = models.DateTimeField()
+    consent_scope = models.CharField(max_length=255)
+    consent_reference = models.CharField(max_length=255, blank=True)
+    api_key_fingerprint = models.CharField(max_length=32, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    objects = CustomerConsentLogQuerySet.as_manager()
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def save(self, *args, **kwargs):
+        # Enforce append-only semantics: reject updates to existing records
+        if not self._state.adding:
+            raise ValidationError("CustomerConsentLog records are immutable and cannot be updated.")
+
+        # Ensure denormalized external_id is captured if not explicitly supplied
+        if self.customer and not self.customer_external_id:
+            self.customer_external_id = self.customer.external_id
+
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        # Prevent row-level deletion
+        raise ValidationError("CustomerConsentLog records cannot be deleted.")
+
+    def __str__(self):
+        ref = self.customer_external_id or (self.customer.external_id if self.customer else "Unknown")
+        return f"Consent for {ref} @ {self.created_at:%Y-%m-%d %H:%M}"
+
 
 # KYC -----------------------------------------------------------------------------------
 
@@ -283,7 +456,8 @@ class CustomerKYC(models.Model):
         CustomerProfile, on_delete=models.CASCADE, related_name="kyc"
     )
     id_type = models.CharField(max_length=20, choices=ID_TYPE_CHOICES)
-    id_number = models.CharField(max_length=50)
+    # Stored encrypted via Fernet helper
+    id_number = models.CharField(max_length=255, help_text="Encrypted identity number.")
     id_document = models.FileField(
         upload_to="kyc/customers/id/",
         storage=KYCDocumentStorage(),

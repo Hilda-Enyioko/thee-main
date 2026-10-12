@@ -2,7 +2,7 @@ from django import forms
 from django.contrib import admin, messages
 from django.utils.html import format_html
 
-from .models import CustomerKYC, PartnerKYC
+from .models import CustomerKYC, PartnerKYC, CustomerConsentLog
 from .services import KYCReviewError, review_customer_kyc, review_partner_kyc
 
 REVIEWER_ROLES = ("super_admin", "support_admin")
@@ -101,25 +101,26 @@ class PartnerKYCAdmin(BaseKYCAdmin):
     def address_link(self, o): return _file_link(o.proof_of_address)
 
 
-@admin.register(CustomerKYC)
-class CustomerKYCAdmin(BaseKYCAdmin):
-    review_service = staticmethod(review_customer_kyc)
-    list_display = ("customer_email", "partner_name", "id_type", "masked_id", "status", "submitted_at")
-    list_filter = ("status", "id_type")
-    search_fields = ("customer__user__email", "customer__partner__name")
-    list_select_related = ("customer__user", "customer__partner")
-    fields = ("customer_email", "partner_name", "id_type", "id_number", "id_link", "selfie_link",
-              "submitted_at", "status", "review_note", "reviewed_at")
-    readonly_fields = ("customer_email", "partner_name", "id_type", "id_number", "id_link",
-                       "selfie_link", "submitted_at", "reviewed_at")
+@admin.register(CustomerConsentLog)
+class CustomerConsentLogAdmin(admin.ModelAdmin):
+    list_display = (
+        "customer_external_id",
+        "partner",
+        "consent_obtained",
+        "consent_scope",
+        "created_at",
+    )
+    list_filter = ("consent_obtained", "partner", "created_at")
+    search_fields = ("customer_external_id", "consent_reference", "ip_address")
 
-    @admin.display(description="Customer")
-    def customer_email(self, o): return o.customer.user.email
-    @admin.display(description="Partner")
-    def partner_name(self, o): return o.customer.partner.name
-    @admin.display(description="ID number")
-    def masked_id(self, o): return f"****{o.id_number[-4:]}"
-    @admin.display(description="ID document")
-    def id_link(self, o): return _file_link(o.id_document)
-    @admin.display(description="Selfie")
-    def selfie_link(self, o): return _file_link(o.selfie)
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def get_readonly_fields(self, request, obj=None):
+        return [f.name for f in self.model._meta.fields]
