@@ -22,6 +22,8 @@ EXEMPT_VIEW_NAMES = {
     "category-list",
     # Paystack
     "payments:paystack-webhook","payments:pay-link",
+    # cron
+    "cron_renewal_reminders", "cron_retry_due",
 }
 EXEMPT_PATH_PREFIXES = ("/api/v1/staff/",)
 

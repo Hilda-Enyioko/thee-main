@@ -7,6 +7,14 @@ from .cron_views import (
 
 urlpatterns = [
     path("service/register/", ServiceWebhookRegisterView.as_view(), name="service-webhook-register"),
-    path("internal/cron/retry-due/", trigger_retry_due, name="cron_retry_due"),
-    path("internal/cron/renewal-reminders/", trigger_renewal_reminders, name="cron_renewal_reminders"),
+    path(
+        "internal/cron/<str:secret_key>/retry-due/",
+        trigger_retry_due,
+        name="cron_retry_due",
+    ),
+    path(
+        "internal/cron/<str:secret_key>/renewal-reminders/",
+        trigger_renewal_reminders,
+        name="cron_renewal_reminders",
+    ),
 ]

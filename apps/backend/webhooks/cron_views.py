@@ -1,25 +1,21 @@
 import hmac
 from django.conf import settings
 from django.core.management import call_command
-from django.http import JsonResponse
+from django.http import HttpResponseForbidden, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_POST
 
 from webhooks.services import retry_due
 
 
-def _is_authorized(request):
-    auth_header = request.headers.get("Authorization", "")
-    expected = f"Bearer {getattr(settings, 'CRON_TRIGGER_SECRET', '')}"
-    # Use compare_digest to prevent timing attacks
-    return bool(settings.CRON_TRIGGER_SECRET) and hmac.compare_digest(auth_header, expected)
+def _validate_key(key):
+    expected = getattr(settings, "CRON_SECRET_KEY", "")
+    return bool(expected) and hmac.compare_digest(key, expected)
 
 
 @csrf_exempt
-@require_POST
-def trigger_retry_due(request):
-    if not _is_authorized(request):
-        return JsonResponse({"error": "Unauthorized"}, status=401)
+def trigger_retry_due(request, secret_key):
+    if not _validate_key(secret_key):
+        return HttpResponseForbidden("Forbidden")
 
     try:
         count = retry_due()
@@ -29,10 +25,9 @@ def trigger_retry_due(request):
 
 
 @csrf_exempt
-@require_POST
-def trigger_renewal_reminders(request):
-    if not _is_authorized(request):
-        return JsonResponse({"error": "Unauthorized"}, status=401)
+def trigger_renewal_reminders(request, secret_key):
+    if not _validate_key(secret_key):
+        return HttpResponseForbidden("Forbidden")
 
     try:
         call_command("send_renewal_reminders")
