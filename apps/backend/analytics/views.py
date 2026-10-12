@@ -4,7 +4,6 @@ from django.db.models import Count, Sum
 from drf_spectacular.utils import extend_schema
 
 from subscriptions.models import PolicySubscription
-from accounts.models import CustomerProfile
 from accounts.permissions import IsProviderAdmin, IsDistributorAdmin
 from core.throttles import PartnerRateThrottle
 
@@ -246,10 +245,8 @@ class DistributorSummaryView(APIView):
             .order_by("-total_sold")[:5]
         )
 
-        total_customers = CustomerProfile.objects.filter(partner=partner).count()
-
         return Response({
-            "summary": {**summary, "total_customers": total_customers},
+            "summary": {**summary},
             "top_providers": list(top_providers),
             "top_plans": list(top_plans),
         })

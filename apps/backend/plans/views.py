@@ -15,12 +15,13 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.permissions import (
-    IsCustomerOfPartner, IsDistributorAdmin, IsProviderAdmin, IsServiceAccount,
+    IsPartnerKey, IsDistributorAdmin, IsProviderAdmin, IsServiceAccount,
 )
 from accounts.utils import get_partner_from_user, is_full_partner_admin
 from core.docs import MessageSerializer, Tag, error, validation_error
 from core.models import Partner
 from core.throttles import PartnerRateThrottle
+from core.docs import PARTNER_KEY_AUTH
 
 from .models import DistributorAccessGrant, InsuranceCategory, InsurancePlan
 from .selectors import (
@@ -121,7 +122,7 @@ class InsuranceCategoryListView(APIView):
 
 
 class InsurancePlanListView(APIView):
-    permission_classes = [IsCustomerOfPartner]
+    permission_classes = [IsPartnerKey]
     throttle_classes = [PartnerRateThrottle]
 
     @extend_schema(
@@ -147,14 +148,14 @@ class InsurancePlanListView(APIView):
 
 
 class InsurancePlanDetailView(APIView):
-    permission_classes = [IsCustomerOfPartner]
+    permission_classes = [IsPartnerKey]
     throttle_classes = [PartnerRateThrottle]
 
     @extend_schema(
         operation_id="plans_retrieve_by_id",
         summary="Get one plan (customer storefront)",
         description="Same visibility rules as the list. A plan outside the caller's storefront returns 404 (never 403) so IDs can't be probed.",
-        auth=[{"BearerAuth": [], "PartnerKey": []}],
+        auth=[PARTNER_KEY_AUTH],
         responses={200: InsurancePlanSerializer, 401: ERR_KEY, 403: error("Not a customer of this partner.", "You are not registered with this partner.", key="detail"),
                    404: error("Not available to this storefront.", "Plan not found.")},
         examples=[OpenApiExample("OK", response_only=True, status_codes=["200"], value=PLAN_EXAMPLE)],

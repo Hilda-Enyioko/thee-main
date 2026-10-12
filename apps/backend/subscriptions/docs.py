@@ -1,13 +1,14 @@
 from drf_spectacular.utils import OpenApiExample, OpenApiParameter, OpenApiResponse, inline_serializer
 from drf_spectacular.types import OpenApiTypes
 from rest_framework import serializers as s
+from core.docs import PARTNER_KEY_AUTH
 
 from .models import PolicySubscription
 
 SUB_ID = "7a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"
 CUSTOMER_ID = "9b1d6c0e-1a2b-4c3d-8e9f-0a1b2c3d4e5f"
 PLAN_ID = "c1d2e3f4-a5b6-4c7d-8e9f-0a1b2c3d4e5f"
-CUSTOMER_AUTH = [{"BearerAuth": [], "PartnerKey": []}]
+CUSTOMER_AUTH = PARTNER_KEY_AUTH
 
 _BASE = {
     "id": SUB_ID, "customer": CUSTOMER_ID, "customer_email": "chidi@example.com", "plan": PLAN_ID,

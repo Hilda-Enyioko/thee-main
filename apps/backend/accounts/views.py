@@ -406,12 +406,8 @@ class LoginView(APIView):
                             status=status.HTTP_403_FORBIDDEN)
 
         partner = get_partner_from_user(user)
-        body = {"tokens": generate_tokens(user, partner_id=partner.id if partner else None),
-                "role": user.role, "email": user.email, "first_name": user.first_name}
-        kyc_status = _customer_kyc_status(user, partner)
-        if kyc_status:
-            body["kyc_status"] = kyc_status
-        return Response(body)
+        return Response({"tokens": generate_tokens(user, partner_id=partner.id if partner else None),
+                    "role": user.role, "email": user.email, "first_name": user.first_name})
 
 
 class TokenRefreshView(APIView):

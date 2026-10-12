@@ -10,9 +10,8 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from accounts.permissions import IsCustomer
-from core.docs import DetailSerializer, Tag, error
-from core.throttles import PartnerRateThrottle
+from core.api import PartnerKeyAPIView
+from core.docs import PARTNER_KEY_AUTH, DetailSerializer, Tag, error
 
 from .models import Transaction
 from .serializers import TransactionSerializer
@@ -24,56 +23,69 @@ log = logging.getLogger(__name__)
 
 SUB_ID = "7a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"
 TXN_EXAMPLE = {
-    "id": "e2b6c1a0-3d4f-4b5a-9c8d-1f2e3a4b5c6d", "reference": "TII-9F3A7C1D2B4E6A80",
-    "amount": "85000.00", "currency": "NGN", "payment_type": "NEW_SUBSCRIPTION",
-    "payment_status": "SUCCESSFUL", "gateway": "PAYSTACK", "gateway_reference": "4099260516",
-    "subscription_id": SUB_ID, "subscription_status": "active", "initiated_by": "chidi@example.com",
-    "created_at": "2026-10-06T10:15:00Z", "updated_at": "2026-10-06T10:16:12Z",
+    "id": "e2b6c1a0-3d4f-4b5a-9c8d-1f2e3a4b5c6d",
+    "reference": "TII-9F3A7C1D2B4E6A80",
+    "amount": "85000.00",
+    "currency": "NGN",
+    "payment_type": "NEW_SUBSCRIPTION",
+    "payment_status": "SUCCESSFUL",
+    "gateway": "PAYSTACK",
+    "gateway_reference": "4099260516",
+    "subscription_id": SUB_ID,
+    "subscription_status": "active",
+    "customer_external_id": "cust_1042",
+    "initiated_by_partner": "QuickCover Ltd",
+    "created_at": "2026-10-06T10:15:00Z",
+    "updated_at": "2026-10-06T10:16:12Z",
 }
 
 
-class PaymentVerifyView(APIView):
-    permission_classes = [IsCustomer]
-    throttle_classes = [PartnerRateThrottle]
-
+class PaymentVerifyView(PartnerKeyAPIView):
     @extend_schema(
         summary="Verify a payment after Paystack redirects back",
         description=(
-            "Call this from your callback page with the `reference` Paystack appended to the redirect URL "
-            "(or the `reference` returned by `/pay/` or `/renew/`).\n\n"
-            "If the payment is still `PENDING` we ask Paystack directly and update the subscription, so the UI "
-            "doesn't have to wait for the webhook. Safe to poll every few seconds. When `payment_status` is "
-            "`SUCCESSFUL`, `subscription_status` is `active`."
+            "Call this from your backend with the `reference` Paystack appended to your `callback_url` "
+            "(or the `reference` returned by `/pay/` or `/renew/`). If the payment is still `PENDING` we ask Paystack "
+            "directly and update the subscription, so you don't have to wait for the webhook. Safe to poll every few seconds. "
+            "When `payment_status` is `SUCCESSFUL`, `subscription_status` is `active`."
         ),
-        auth=[{"BearerAuth": [], "PartnerKey": []}],
-        parameters=[OpenApiParameter("reference", OpenApiTypes.STR, OpenApiParameter.PATH,
-                                     description="Our transaction reference (`TII-...`).")],
-        responses={200: TransactionSerializer,
-                   404: error("Unknown reference, or it belongs to another customer.", "Transaction not found.")},
-        examples=[OpenApiExample("Paid", response_only=True, status_codes=["200"], value=TXN_EXAMPLE),
-                  OpenApiExample("Still pending", response_only=True, status_codes=["200"],
-                                 value={**TXN_EXAMPLE, "payment_status": "PENDING", "gateway_reference": None,
-                                        "subscription_status": "pending_payment"})],
+        auth=PARTNER_KEY_AUTH,
+        parameters=[
+            OpenApiParameter(
+                "reference",
+                OpenApiTypes.STR,
+                OpenApiParameter.PATH,
+                description="Our transaction reference (`TII-...`).",
+            )
+        ],
+        responses={
+            200: TransactionSerializer,
+            404: error("Unknown reference, or not one of your customers' payments.", "Transaction not found."),
+        },
+        examples=[OpenApiExample("Paid", response_only=True, status_codes=["200"], value=TXN_EXAMPLE)],
         tags=[Tag.SUBSCRIPTIONS],
     )
     def get(self, request, reference):
-        txn = (Transaction.objects.select_related("subscription", "initiated_by")
-               .filter(reference=reference, subscription__customer__user=request.user).first())
+        txn = (
+            Transaction.objects.select_related("subscription__customer", "initiated_by_partner")
+            .filter(reference=reference, subscription__customer__partner=request.partner)
+            .first()
+        )
         if txn is None:
             return Response({"error": "Transaction not found."}, status=status.HTTP_404_NOT_FOUND)
         if txn.payment_status == Transaction.PAYMENT_STATUS.PENDING:
             try:
                 settle(reference, paystack_verify(reference), source="verify")
             except PaymentError as e:
-                log.warning("Verify failed for %s: %s", reference, e)   # webhook will reconcile
-            txn = Transaction.objects.select_related("subscription", "initiated_by").get(pk=txn.pk)
+                log.warning("Verify failed for %s: %s", reference, e)  # webhook will reconcile
+            txn = Transaction.objects.select_related("subscription__customer", "initiated_by_partner").get(pk=txn.pk)
         return Response(TransactionSerializer(txn).data)
 
 
 class PaystackWebhookView(APIView):
     permission_classes = []
     authentication_classes = []
-    throttle_classes = []   # protected by the signature, and Paystack retries in bursts
+    throttle_classes = []  # protected by the signature, and Paystack retries in bursts
 
     @extend_schema(
         summary="Paystack webhook (server to server)",
@@ -87,18 +99,34 @@ class PaystackWebhookView(APIView):
         auth=[],
         parameters=[OpenApiParameter("x-paystack-signature", OpenApiTypes.STR, OpenApiParameter.HEADER, required=True)],
         request=inline_serializer("PaystackEvent", {"event": s.CharField(), "data": s.DictField()}),
-        responses={200: DetailSerializer, 400: error("Invalid JSON.", "Invalid JSON.", key="detail"),
-                   401: error("Bad or missing signature.", "Invalid signature.", key="detail")},
-        examples=[OpenApiExample("charge.success", request_only=True, value={
-            "event": "charge.success",
-            "data": {"id": 4099260516, "status": "success", "reference": "TII-9F3A7C1D2B4E6A80",
-                     "amount": 8500000, "currency": "NGN", "paid_at": "2026-10-06T10:16:10.000Z",
-                     "customer": {"email": "chidi@example.com"}}}),
-                  OpenApiExample("OK", response_only=True, status_codes=["200"], value={"detail": "Received."})],
+        responses={
+            200: DetailSerializer,
+            400: error("Invalid JSON.", "Invalid JSON.", key="detail"),
+            401: error("Bad or missing signature.", "Invalid signature.", key="detail"),
+        },
+        examples=[
+            OpenApiExample(
+                "charge.success",
+                request_only=True,
+                value={
+                    "event": "charge.success",
+                    "data": {
+                        "id": 4099260516,
+                        "status": "success",
+                        "reference": "TII-9F3A7C1D2B4E6A80",
+                        "amount": 8500000,
+                        "currency": "NGN",
+                        "paid_at": "2026-10-06T10:16:10.000Z",
+                        "customer": {"email": "chidi@example.com"},
+                    },
+                },
+            ),
+            OpenApiExample("OK", response_only=True, status_codes=["200"], value={"detail": "Received."}),
+        ],
         tags=[Tag.WEBHOOKS],
     )
     def post(self, request):
-        raw = request.body   # read BEFORE touching request.data (stream can only be consumed once)
+        raw = request.body  # read BEFORE touching request.data (stream can only be consumed once)
         try:
             verify_webhook_signature(raw, request.headers.get("x-paystack-signature", ""))
         except SignatureVerificationError:

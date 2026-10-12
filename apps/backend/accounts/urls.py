@@ -10,6 +10,10 @@ from .views import (
     StaffServiceAccountRevokeView, ServiceAccountTokenView,
 )
 
+from .customer_views import (
+    CustomerListView, CustomerDetailView,
+)
+
 urlpatterns = [
     path("partner/onboard/", PartnerOnboardingView.as_view(), name="partner-onboard"),
     path("partner/kyc/", PartnerKYCView.as_view(), name="partner-kyc"),
@@ -21,6 +25,9 @@ urlpatterns = [
 
     path("auth/login/", LoginView.as_view(), name="login"),
     path("auth/token/refresh/", TokenRefreshView.as_view(), name="token-refresh"),
+
+    path("customers/", CustomerListView.as_view(), name="customer-list"),
+    path("customers/<str:external_id>/", CustomerDetailView.as_view(), name="customer-detail"),
 
     path("staff/auth/login/", StaffLoginView.as_view(), name="staff-login"),
     path("staff/accounts/", StaffAccountView.as_view(), name="staff-account-list-create"),

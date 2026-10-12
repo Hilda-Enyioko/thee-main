@@ -22,7 +22,6 @@ class CustomUserManager(BaseUserManager):
         if not email:
             raise ValueError("Email is required.")
         email = self.normalize_email(email)
-        extra_fields.setdefault("role", "customer")
         extra_fields.setdefault("is_staff", False)
         extra_fields.setdefault("is_superuser", False)
         extra_fields.setdefault("is_active", True)
@@ -52,7 +51,6 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         ("support_admin", "Support Admin"),
         ("service_account", "Service Account"),
         ("partner_admin", "Partner Admin"),
-        ("customer", "Customer"),
     ]
 
     id = models.UUIDField(
@@ -267,7 +265,6 @@ class Customer(SettlementDetails):
     # Core identity fields
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)
-    # email is optional at the model level for distributor workflows where emails may be unavailable
     email = models.EmailField(db_index=True) 
     phone_number = models.CharField(max_length=30, blank=True)
     date_of_birth = models.DateField(null=True, blank=True)

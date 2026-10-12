@@ -2,7 +2,7 @@ from django import forms
 from django.contrib import admin, messages
 from django.utils.html import format_html
 
-from .models import PartnerKYC, CustomerConsentLog
+from .models import PartnerKYC, CustomerConsentLog, Customer
 from .services import KYCReviewError, review_partner_kyc
 
 REVIEWER_ROLES = ("super_admin", "support_admin")
@@ -124,3 +124,14 @@ class CustomerConsentLogAdmin(admin.ModelAdmin):
 
     def get_readonly_fields(self, request, obj=None):
         return [f.name for f in self.model._meta.fields]
+
+@admin.register(Customer)
+class CustomerAdmin(ReviewerOnlyMixin, admin.ModelAdmin):
+    list_display = ("full_name", "email", "partner", "external_id", "kyc_status", "consent_obtained", "created_at")
+    list_filter = ("kyc_status", "consent_obtained", "partner")
+    search_fields = ("email", "external_id", "first_name", "last_name")
+    list_select_related = ("partner",)
+    exclude = ("id_number",)                         # never render the encrypted value
+
+    def has_change_permission(self, request, obj=None):
+        return False                                  # partner-owned data: staff view only
