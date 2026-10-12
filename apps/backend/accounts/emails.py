@@ -120,20 +120,9 @@ def send_payment_emails(txn_id):
         return
 
     sub = txn.subscription
-    plan, customer = sub.plan, sub.customer
+    plan = sub.plan
     kind = "renewal" if txn.payment_type == "RENEWAL" else "purchase"
     plan_name, ref = escape(plan.name), escape(txn.reference)
-
-    # NOTE: Comment out or remove this block if customer communication is handled 
-    # via n8n / partner webhooks (subscription.created) to avoid double-emailing 
-    # or confusing partner-acquired customers with TheeInsurance branding.
-    _send(
-        [customer.email],
-        f"Payment received: {plan.name}",
-        f"<p>Hi {escape(customer.first_name)},</p>"
-        f"<p>We've received your payment of <b>{_naira(txn.amount)}</b> for <b>{plan_name}</b> ({kind}).</p>"
-        f"<p>Coverage: {sub.start_date} to {sub.end_date}<br>Reference: {ref}</p>",
-    )
 
     _send(
         _partner_admin_emails(sub.provider),

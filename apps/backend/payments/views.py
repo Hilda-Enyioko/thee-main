@@ -3,6 +3,8 @@
 import json
 import logging
 
+from django.core import signing
+from django.http import HttpResponse, HttpResponseRedirect
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema, inline_serializer
 from rest_framework import serializers as s
@@ -18,6 +20,10 @@ from .serializers import TransactionSerializer
 from .services import (
     PaymentError, SignatureVerificationError, paystack_verify, settle, verify_webhook_signature,
 )
+from subscriptions.models import PolicySubscription
+from .links import read_pay_link
+from .services import GatewayError, NotPayable, initiate_checkout
+
 
 log = logging.getLogger(__name__)
 
@@ -145,3 +151,27 @@ class PaystackWebhookView(APIView):
                 log.exception("Paystack webhook processing failed")
                 return Response({"detail": "Processing error."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         return Response({"detail": "Received."})
+
+
+class PayLinkView(APIView):
+    """Customer-facing link from emails. The signed token is the credential; no login, no partner key."""
+    authentication_classes, permission_classes, throttle_classes = [], [], []
+
+    @extend_schema(exclude=True)
+    def get(self, request, token):
+        try:
+            data = read_pay_link(token)
+        except signing.BadSignature:
+            return HttpResponse("This link is invalid or has expired.", status=410)
+        sub = PolicySubscription.objects.select_related("customer__partner", "plan").filter(id=data["s"]).first()
+        if sub is None:
+            return HttpResponse("This link is invalid or has expired.", status=410)
+        ptype = (Transaction.PAYMENT_TYPE.RENEWAL if data["p"] == "RENEWAL"
+                 else Transaction.PAYMENT_TYPE.NEW_SUBSCRIPTION)
+        try:
+            out = initiate_checkout(sub, ptype, sub.customer.partner)
+        except NotPayable:
+            return HttpResponse("This payment is no longer needed or available.", status=409)
+        except GatewayError:
+            return HttpResponse("Payment service is unavailable. Please try again shortly.", status=502)
+        return HttpResponseRedirect(out["payment_url"])

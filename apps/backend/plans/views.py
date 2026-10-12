@@ -10,6 +10,7 @@ from drf_spectacular.utils import (
     OpenApiExample, OpenApiParameter, OpenApiResponse, extend_schema, inline_serializer,
 )
 from rest_framework import serializers as s
+from rest_framework.exceptions import NotFound
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -101,6 +102,17 @@ def apply_plan_filters(plans, params):
             raise s.ValidationError({"provider_id": ["Must be a valid UUID."]})
     sort_by = params.get("sort_by", "-created_at")
     return plans.order_by(sort_by if sort_by in ALLOWED_SORTS else "-created_at")
+
+
+def _service_partner(request):
+    try:
+        pid = uuid.UUID(request.query_params.get("partner_id", ""))
+    except ValueError:
+        raise s.ValidationError({"partner_id": ["A valid partner_id is required."]})
+    partner = Partner.objects.filter(id=pid, is_active=True).first()
+    if partner is None:
+        raise NotFound("Partner not found.")
+    return partner
 
 
 # ================================================================ 6. PLANS: storefront (customers)
@@ -492,28 +504,35 @@ class PlanRecommendationView(APIView):
 
     @extend_schema(
         summary="AI engine: recommended plans",
-        description="Service-account only. Uses the storefront of the partner in `X-Partner-Key`, ordered by premium (cheapest first).",
-        auth=[{"BearerAuth": [], "PartnerKey": []}],
-        parameters=[OpenApiParameter("category", OpenApiTypes.STR, OpenApiParameter.QUERY),
-                    OpenApiParameter("budget", OpenApiTypes.DECIMAL, OpenApiParameter.QUERY, description="Max premium (NGN)."),
-                    OpenApiParameter("coverage_level", OpenApiTypes.STR, OpenApiParameter.QUERY)],
+        description="Service-account only. Uses the storefront of the partner specified via `partner_id`, ordered by premium (cheapest first).",
+        auth=[{"BearerAuth": []}],
+        parameters=[
+            OpenApiParameter("partner_id", OpenApiTypes.UUID, OpenApiParameter.QUERY, required=True, description="Target partner UUID."),
+            OpenApiParameter("category", OpenApiTypes.STR, OpenApiParameter.QUERY),
+            OpenApiParameter("budget", OpenApiTypes.DECIMAL, OpenApiParameter.QUERY, description="Max premium (NGN)."),
+            OpenApiParameter("coverage_level", OpenApiTypes.STR, OpenApiParameter.QUERY),
+        ],
         responses={200: inline_serializer("RecommendationResponse", {"recommended_plans": InsurancePlanSerializer(many=True), "filters_applied": s.DictField()}),
-                   400: validation_error("budget", "Must be a number.")},
+                   400: validation_error("budget", "Must be a number."),
+                   404: error("Partner not found.", "Partner not found.")},
         examples=[OpenApiExample("OK", response_only=True, status_codes=["200"], value={
             "recommended_plans": [PLAN_EXAMPLE], "filters_applied": {"category": "motor", "budget": "100000", "coverage_level": None}})],
         tags=[Tag.PLANS],
     )
     def get(self, request):
+        partner = _service_partner(request)
         p = request.query_params
-        plans = plans_visible_to_partner(request.partner).select_related("provider", "category")
+        plans = plans_visible_to_partner(partner).select_related("provider", "category")
         if p.get("category"):
             plans = plans.filter(category__name=p["category"])
         if p.get("coverage_level"):
             plans = plans.filter(coverage_level=p["coverage_level"])
         if (budget := _decimal(p, "budget")) is not None:
             plans = plans.filter(premium__lte=budget)
-        return Response({"recommended_plans": InsurancePlanSerializer(plans.order_by("premium"), many=True).data,
-                         "filters_applied": {"category": p.get("category"), "budget": p.get("budget"), "coverage_level": p.get("coverage_level")}})
+        return Response({
+            "recommended_plans": InsurancePlanSerializer(plans.order_by("premium"), many=True).data,
+            "filters_applied": {"category": p.get("category"), "budget": p.get("budget"), "coverage_level": p.get("coverage_level")},
+        })
 
 
 class PlanContextView(APIView):
@@ -522,16 +541,25 @@ class PlanContextView(APIView):
 
     @extend_schema(
         summary="AI engine: compact plan context for prompts",
-        auth=[{"BearerAuth": [], "PartnerKey": []}],
-        responses={200: inline_serializer("PlanContextResponse", {"partner": s.CharField(), "total_plans": s.IntegerField(), "plans": s.ListField(child=s.DictField())})},
+        auth=[{"BearerAuth": []}],
+        parameters=[
+            OpenApiParameter("partner_id", OpenApiTypes.UUID, OpenApiParameter.QUERY, required=True, description="Target partner UUID."),
+        ],
+        responses={
+            200: inline_serializer("PlanContextResponse", {"partner": s.CharField(), "total_plans": s.IntegerField(), "plans": s.ListField(child=s.DictField())}),
+            404: error("Partner not found.", "Partner not found."),
+        },
         examples=[OpenApiExample("OK", response_only=True, status_codes=["200"], value={"partner": "QuickCover Ltd", "total_plans": 1, "plans": [{
             "id": PLAN_ID, "name": "Motor Comprehensive Plus", "provider": "Sunrise Assurance Plc", "category": "Motor", "coverage_level": "Comprehensive",
             "coverage_amount": "5000000.00", "premium": "85000.00", "duration_months": 12, "description": "Full cover incl. theft, fire, third party and flood damage."}]})],
         tags=[Tag.PLANS],
     )
     def get(self, request):
-        plans = plans_visible_to_partner(request.partner).select_related("provider", "category")
-        context = [{"id": str(p.id), "name": p.name, "provider": p.provider.name, "category": p.category.get_name_display(),
-                    "coverage_level": p.get_coverage_level_display(), "coverage_amount": str(p.coverage_amount),
-                    "premium": str(p.premium), "duration_months": p.duration_months, "description": p.description} for p in plans]
-        return Response({"partner": request.partner.name, "total_plans": len(context), "plans": context})
+        partner = _service_partner(request)
+        plans = plans_visible_to_partner(partner).select_related("provider", "category")
+        context = [{
+            "id": str(p.id), "name": p.name, "provider": p.provider.name, "category": p.category.get_name_display(),
+            "coverage_level": p.get_coverage_level_display(), "coverage_amount": str(p.coverage_amount),
+            "premium": str(p.premium), "duration_months": p.duration_months, "description": p.description,
+        } for p in plans]
+        return Response({"partner": partner.name, "total_plans": len(context), "plans": context})

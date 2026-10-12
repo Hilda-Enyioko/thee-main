@@ -263,3 +263,20 @@ class DistributorAccessGrant(models.Model):
     def __str__(self):
         target = self.plan.name if self.plan_id else f"{self.provider.name} (all plans)"
         return f"{self.distributor.name} → {target} [{self.status}]"
+
+
+class PlanRecommendation(models.Model):
+    PENDING, READY, FAILED = "pending", "ready", "failed"
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    partner = models.ForeignKey("core.Partner", on_delete=models.CASCADE, related_name="plan_recommendations")
+    customer = models.ForeignKey("accounts.Customer", on_delete=models.CASCADE, related_name="recommendations")
+    criteria = models.JSONField(default=dict, blank=True)
+    status = models.CharField(max_length=10, default=PENDING, db_index=True)
+    results = models.JSONField(default=list, blank=True)
+    summary = models.TextField(blank=True)
+    failure_reason = models.CharField(max_length=500, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]

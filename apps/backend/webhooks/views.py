@@ -76,7 +76,7 @@ class WebhookListCreateView(APIView):
             return Response({"error": "At least one event is required."}, status=400)
 
         # validate events against allowed choices
-        valid_events = [choice[0] for choice in WebhookEvent.EVENT_CHOICES]
+        valid_events = sorted(t for t, d in CATALOGUE.items() if N8N in d.audiences)
         invalid = [e for e in events if e not in valid_events]
         if invalid:
             return Response({

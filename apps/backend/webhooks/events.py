@@ -38,9 +38,16 @@ class E:
     SUBSCRIPTION_UPDATED = "subscription.updated"
     PAYMENT_SUCCESSFUL = "payment.successful"
     CHARGE_FAILED = "charge.failed"
+    SUBSCRIPTION_RENEWED = "subscription.renewed"
+    SUBSCRIPTION_PAYMENT_SUCCEEDED = "subscription.payment_succeeded"
+    SUBSCRIPTION_PAYMENT_FAILED = "subscription.payment_failed"
+    SUBSCRIPTION_RENEWAL_DUE = "subscription.renewal_due"
+    RECOMMENDATION_REQUESTED = "recommendation.requested"
+    RECOMMENDATION_READY = "recommendation.ready"
 
 
 _CLAIM = ("claim_id", "claim_reference", "claim_type", "status")
+_SUB = ("subscription_id", "customer", "plan", "amount", "start_date", "end_date", "provider", "partner")
 
 _DEFS = [
     # claims pipeline
@@ -67,6 +74,12 @@ _DEFS = [
     EventDef(E.SUBSCRIPTION_UPDATED, "Subscription updated", (PARTNER,), ()),
     EventDef(E.PAYMENT_SUCCESSFUL, "Payment successful", (N8N,), ()),
     EventDef(E.CHARGE_FAILED, "Charge failed (dunning)", (N8N,), ()),
+        EventDef(E.SUBSCRIPTION_RENEWED, "Subscription renewed", (PARTNER,), ()),
+    EventDef(E.SUBSCRIPTION_PAYMENT_SUCCEEDED, "Customer payment succeeded", (N8N,), _SUB + ("payment",)),
+    EventDef(E.SUBSCRIPTION_PAYMENT_FAILED, "Customer payment failed", (N8N,), _SUB + ("payment", "reason", "action_url")),
+    EventDef(E.SUBSCRIPTION_RENEWAL_DUE, "Renewal reminder due", (N8N,), _SUB + ("days_left", "window", "action_url")),
+    EventDef(E.RECOMMENDATION_REQUESTED, "Plan recommendation requested", (N8N,), ("request_id", "customer", "criteria")),
+    EventDef(E.RECOMMENDATION_READY, "Plan recommendation ready", (PARTNER,), ("request_id", "status", "recommendations")),
 ]
 
 CATALOGUE = {d.type: d for d in _DEFS}

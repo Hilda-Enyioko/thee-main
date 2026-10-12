@@ -21,7 +21,7 @@ EXEMPT_VIEW_NAMES = {
     "distributor-access-grants", "distributor-access-grant-withdraw",
     "category-list",
     # Paystack
-    "payments:paystack-webhook",
+    "payments:paystack-webhook","payments:pay-link",
 }
 EXEMPT_PATH_PREFIXES = ("/api/v1/staff/",)
 

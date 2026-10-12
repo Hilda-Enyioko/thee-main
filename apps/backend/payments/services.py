@@ -15,7 +15,9 @@ from django.utils import timezone
 from accounts import emails
 from subscriptions.models import PolicySubscription
 from subscriptions.rules import RENEWABLE_STATUSES, can_renew
-from webhooks.services import dispatch_webhook
+from webhooks.services import dispatch_webhook, emit
+from webhooks import builders as b
+from webhooks.events import E
 
 from .models import CallbackLog, Transaction
 
@@ -271,8 +273,9 @@ def settle(reference: str, data: dict, source: str):
         txn.save(update_fields=["payment_status", "gateway_reference", "gateway_response", "updated_at"])
 
         sub = (
-            PolicySubscription.objects.select_for_update(of=("self",))
-            .select_related("plan", "provider", "distributor", "customer")
+            PolicySubscription.objects.select_for_update(of=("self")),
+            emit(E.SUBSCRIPTION_PAYMENT_SUCCEEDED, partner=sub.customer.partner, aggregate_id=sub.id,
+                 data=b.subscription_payment_succeeded(sub, txn), discriminator=txn.reference)
             .get(pk=txn.subscription_id)
         )
         applied = _apply_success(txn, sub)
@@ -299,11 +302,17 @@ def settle(reference: str, data: dict, source: str):
             emails.on_commit_send(emails.send_payment_emails, txn.pk)
         return txn
 
-    if gw_status in ("failed", "reversed") and txn.payment_status == Transaction.PAYMENT_STATUS.PENDING:
-        txn.payment_status = Transaction.PAYMENT_STATUS.FAILED
-        txn.gateway_response = data
-        txn.save(update_fields=["payment_status", "gateway_response", "updated_at"])
-        _log(reference, data, CallbackLog.Status.FAILED, txn)
+        if gw_status in ("failed", "reversed") and txn.payment_status == Transaction.PAYMENT_STATUS.PENDING:
+            txn.payment_status = Transaction.PAYMENT_STATUS.FAILED
+            txn.gateway_response = data
+            txn.save(update_fields=["payment_status", "gateway_response", "updated_at"])
+            _log(reference, data, CallbackLog.Status.FAILED, txn)
+            sub = (PolicySubscription.objects
+               .select_related("plan__category", "provider", "distributor", "customer__partner")
+               .get(pk=txn.subscription_id))
+            emit(E.SUBSCRIPTION_PAYMENT_FAILED, partner=sub.customer.partner, aggregate_id=sub.id,
+               data=b.subscription_payment_failed(sub, txn, data.get("gateway_response") or gw_status),
+               discriminator=txn.reference)
 
     # "abandoned" / "ongoing" / "pending": leave PENDING; the customer can still finish or retry
     return txn

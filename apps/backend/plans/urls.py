@@ -8,6 +8,11 @@ from .views import (
     PlanRecommendationView, PlanContextView,
 )
 
+from .recommendation_views import (
+    CustomerRecommendationDetailView, ServiceRecommendationResultView,
+    CustomerRecommendationCreateView,
+)
+
 urlpatterns = [
     # customer storefront
     path("categories/", InsuranceCategoryListView.as_view(), name="category-list"),
@@ -27,4 +32,9 @@ urlpatterns = [
     path("distributor/marketplace/plans/", DistributorMarketplacePlansView.as_view(), name="distributor-marketplace-plans"),
     path("partner/access-grants/", DistributorAccessGrantView.as_view(), name="distributor-access-grants"),
     path("partner/access-grants/<uuid:grant_id>/withdraw/", DistributorAccessGrantWithdrawView.as_view(), name="distributor-access-grant-withdraw"),
+    
+    # plan recommendations
+    path("customers/<str:external_id>/recommendations/", CustomerRecommendationCreateView.as_view(), name="recommendation-create"),
+    path("customers/<str:external_id>/recommendations/<uuid:request_id>/", CustomerRecommendationDetailView.as_view(), name="recommendation-detail"),
+    path("service/recommendations/<uuid:request_id>/result/", ServiceRecommendationResultView.as_view(), name="service-recommendation-result"),
 ]

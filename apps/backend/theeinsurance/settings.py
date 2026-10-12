@@ -297,3 +297,7 @@ RESEND_API_KEY = config("RESEND_API_KEY", default="")
 DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="TheeInsurance <no-reply@theeinsurance.com>")
 
 FIELD_ENCRYPTION_KEYS=config("FIELD_ENCRYPTION_KEYS")
+
+PUBLIC_API_BASE_URL = config("PUBLIC_API_BASE_URL")
+
+CRON_TRIGGER_SECRET = config("CRON_TRIGGER_SECRET")
