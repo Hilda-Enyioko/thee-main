@@ -66,7 +66,7 @@ A claim can go round again: after "more info", the partner resubmits and the cla
 
 **Base URL:** `https://theeinsurance-backend-staging.onrender.com`
 
-The URLs in this guide start with `/api/v1/`. If any call returns 404, ask the backend engineer to confirm the exact path in Swagger (`/api/schema/swagger-ui/`).
+The URLs in this guide start with `/api/v1/`. If any call returns 404, ask the backend engineer to confirm the exact path in Swagger (`/api/docs`).
 
 The staging server can be slow to wake up on the first request. Set your HTTP Request nodes to wait up to 60 seconds.
 
