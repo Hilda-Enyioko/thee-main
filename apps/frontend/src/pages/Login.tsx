@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { api } from '../lib/api';
-import { setTokens, setPartnerKey } from '../lib/auth';
+import { setTokens } from '../lib/auth';
 import { useAuth } from '../context/AuthContext';
 import './Login.css';
 import { SiteNav, SiteFooter } from '../components/SiteChrome';
@@ -31,12 +31,8 @@ export default function Login() {
       const { tokens } = loginResponse.data;
       setTokens(tokens.access, tokens.refresh);
 
-      // Step 2: retrieve X-Partner-Key using the same password, while it's
-      // still in memory.
-      const keyResponse = await api.post('/partner/api-key/retrieve/', { password });
-      setPartnerKey(keyResponse.data.api_key);
-
-      // Step 3: fetch partner context
+      // Partner-portal requests use the login session only. X-Partner-Key is
+      // for a partner's customer storefront and must never be kept in this UI.
       const meResponse = await api.get('/partner/me/');
       const me = meResponse.data;
 

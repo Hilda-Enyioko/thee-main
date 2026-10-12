@@ -7,8 +7,7 @@ import { SiteNav, SiteFooter } from '../components/SiteChrome';
 type PartnerType = 'provider' | 'distributor';
 
 interface BusinessDetails {
-  partner_name: string;
-  partner_slug: string;
+  name: string;
   partner_type: PartnerType;
   commission_rate: string;
   email: string;
@@ -19,8 +18,7 @@ interface BusinessDetails {
 }
 
 const initialDetails: BusinessDetails = {
-  partner_name: '',
-  partner_slug: '',
+  name: '',
   partner_type: 'provider',
   commission_rate: '0.00',
   email: '',
@@ -30,34 +28,23 @@ const initialDetails: BusinessDetails = {
   confirm_password: '',
 };
 
-const slugify = (value: string) =>
-  value
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '');
-
 export default function Onboarding() {
   const navigate = useNavigate();
   const [step, setStep] = useState<1 | 2>(1);
-  const [slugTouched, setSlugTouched] = useState(false);
   const [details, setDetails] = useState<BusinessDetails>(initialDetails);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [apiKey, setApiKey] = useState('');
   const [keyCopied, setKeyCopied] = useState(false);
+  const [keySaved, setKeySaved] = useState(false);
 
   const updateField = (field: keyof BusinessDetails, value: string) => {
     setDetails((prev) => ({ ...prev, [field]: value }));
-    if (field === 'partner_name' && !slugTouched) {
-      setDetails((prev) => ({ ...prev, partner_name: value, partner_slug: slugify(value) }));
-    }
   };
 
   const validateStep1 = () => {
     const nextErrors: Record<string, string> = {};
-    if (!details.partner_name.trim()) nextErrors.partner_name = 'Enter your business name.';
-    if (!details.partner_slug.trim()) nextErrors.partner_slug = 'Enter a slug for your business.';
+    if (!details.name.trim()) nextErrors.name = 'Enter your business name.';
     if (!details.email.trim()) nextErrors.email = 'Enter a work email.';
     if (!details.first_name.trim()) nextErrors.first_name = 'Enter a first name.';
     if (!details.last_name.trim()) nextErrors.last_name = 'Enter a last name.';
@@ -77,10 +64,9 @@ export default function Onboarding() {
     setErrors({});
     try {
       const response = await api.post('/partner/onboard/', {
-        partner_name: details.partner_name,
-        partner_slug: details.partner_slug,
+        name: details.name,
         partner_type: details.partner_type,
-        commission_rate: details.partner_type === 'distributor' ? details.commission_rate : '0.00',
+        ...(details.partner_type === 'distributor' ? { commission_rate: details.commission_rate } : {}),
         email: details.email,
         first_name: details.first_name,
         last_name: details.last_name,
@@ -141,23 +127,10 @@ export default function Onboarding() {
                 Business name
                 <input
                   type="text"
-                  value={details.partner_name}
-                  onChange={(e) => updateField('partner_name', e.target.value)}
+                  value={details.name}
+                  onChange={(e) => updateField('name', e.target.value)}
                 />
-                {errors.partner_name && <span className="field-error">{errors.partner_name}</span>}
-              </label>
-
-              <label>
-                Slug
-                <input
-                  type="text"
-                  value={details.partner_slug}
-                  onChange={(e) => {
-                    setSlugTouched(true);
-                    updateField('partner_slug', slugify(e.target.value));
-                  }}
-                />
-                {errors.partner_slug && <span className="field-error">{errors.partner_slug}</span>}
+                {errors.name && <span className="field-error">{errors.name}</span>}
               </label>
             </div>
 
@@ -268,7 +241,11 @@ export default function Onboarding() {
               Next, log in and submit your verification documents to activate your account.
             </p>
 
-            <button className="btn-primary" onClick={() => navigate('/login')}>
+            <label className="key-confirmation">
+              <input type="checkbox" checked={keySaved} onChange={(e) => setKeySaved(e.target.checked)} />
+              I have saved this API key securely.
+            </label>
+            <button className="btn-primary" disabled={!keySaved} onClick={() => navigate('/login')}>
               Continue to login
             </button>
           </div>

@@ -22,6 +22,12 @@ export default function KycSubmission() {
     if (!tin.trim()) nextErrors.tax_identification_number = 'Enter your tax identification number.';
     if (!cacCertificate) nextErrors.cac_certificate = 'Upload your CAC certificate.';
     if (!proofOfAddress) nextErrors.proof_of_address = 'Upload proof of address.';
+    if (admin?.partnerType === 'provider' && !naicomNumber.trim()) {
+      nextErrors.naicom_licence_number = 'Enter your NAICOM licence number.';
+    }
+    if (admin?.partnerType === 'provider' && !naicomDoc) {
+      nextErrors.naicom_licence_doc = 'Upload your NAICOM licence document.';
+    }
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
   };
@@ -102,8 +108,9 @@ export default function KycSubmission() {
             </div>
 
             <label>
-              NAICOM licence number <span className="optional-tag">optional</span>
+              NAICOM licence number {admin?.partnerType !== 'provider' && <span className="optional-tag">optional</span>}
               <input type="text" value={naicomNumber} onChange={(e) => setNaicomNumber(e.target.value)} />
+              {errors.naicom_licence_number && <span className="field-error">{errors.naicom_licence_number}</span>}
             </label>
 
             <label className="file-label">
@@ -120,7 +127,7 @@ export default function KycSubmission() {
             </label>
 
             <label className="file-label">
-              NAICOM licence document <span className="optional-tag">optional</span>
+              NAICOM licence document {admin?.partnerType !== 'provider' && <span className="optional-tag">optional</span>}
               <div className="file-drop">
                 <input
                   type="file"
@@ -129,6 +136,7 @@ export default function KycSubmission() {
                 />
                 <span>{naicomDoc ? naicomDoc.name : 'Choose file'}</span>
               </div>
+              {errors.naicom_licence_doc && <span className="field-error">{errors.naicom_licence_doc}</span>}
             </label>
 
             <label className="file-label">

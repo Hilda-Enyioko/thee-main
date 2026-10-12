@@ -11,6 +11,9 @@ import PlanManagement from './pages/plans/PlanManagement';
 import AccessRequests from './pages/distributor/AccessRequests';
 import Analytics from './pages/analytics/Analytics';
 import KycSubmission from './pages/kyc/KycSubmission';
+import PartnerProfile from './pages/PartnerProfile';
+import ProviderAccessInbox from './pages/ProviderAccessInbox';
+import PartnerSubscriptions from './pages/PartnerSubscriptions';
 
 export default function App() {
   return (
@@ -23,8 +26,11 @@ export default function App() {
 
           <Route element={<ProtectedRoute />}>
             <Route path="/kyc" element={<KycSubmission />} />
+            <Route path="/profile" element={<PartnerProfile />} />
+            <Route path="/subscriptions" element={<PartnerSubscriptions />} />
             <Route element={<RoleRoute allow="provider" />}>
               <Route path="/plans" element={<PlanManagement />} />
+              <Route path="/access-inbox" element={<ProviderAccessInbox />} />
             </Route>
             <Route element={<RoleRoute allow="distributor" />}>
               <Route path="/access-requests" element={<AccessRequests />} />
