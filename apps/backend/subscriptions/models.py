@@ -85,7 +85,7 @@ class PolicySubscription(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.customer.user.email} — {self.plan.name} ({self.status})"
+        return f"{self.customer.email} — {self.plan.name} ({self.status})"
 
 
 REQUIRED_DOCUMENTS = {

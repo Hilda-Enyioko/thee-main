@@ -94,7 +94,7 @@ class Claim(models.Model):
         super().save(*args, **kwargs)
     
     def __str__(self):
-        return f"{self.claim_reference} - {self.customer.user.email} ({self.status})"
+        return f"{self.claim_reference} - {self.customer.email} ({self.status})"
 
 
 class ClaimDocument(models.Model):

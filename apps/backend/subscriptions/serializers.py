@@ -18,7 +18,7 @@ class _Base(serializers.ModelSerializer):
     plan_name = serializers.CharField(source="plan.name", read_only=True)
     provider_name = serializers.CharField(source="provider.name", read_only=True)
     distributor_name = serializers.CharField(source="distributor.name", read_only=True, default=None)
-    customer_email = serializers.CharField(source="customer.user.email", read_only=True)
+    customer_email = serializers.CharField(source="customer.email", read_only=True)
     channel = serializers.SerializerMethodField()
 
     class Meta:

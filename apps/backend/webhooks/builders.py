@@ -74,7 +74,7 @@ def claim_rejected(claim):
 
 def claim_status_updated(claim):   # legacy partner event
     return {**_core(claim),
-            "customer_email": claim.customer.user.email,
+            "customer_email": claim.customer.email,
             "approved_amount": str(claim.approved_amount) if claim.approved_amount is not None else None}
 
 

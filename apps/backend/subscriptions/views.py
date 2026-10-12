@@ -91,7 +91,7 @@ def _channel_filter(qs, value):
 
 def _fire_cancel_webhooks(sub):
     payload = {"subscription_id": str(sub.id), "plan": sub.plan.name,
-               "customer_email": sub.customer.user.email, "status": "cancelled"}
+               "customer_email": sub.customer.email, "status": "cancelled"}
 
     def _go():
         dispatch_webhook(sub.provider, "subscription.cancelled", payload)
@@ -505,7 +505,7 @@ class StaffSubscriptionListView(APIView):
         if v := p.get("distributor_id"):
             qs = qs.filter(distributor_id=_uuid("distributor_id", v))
         if v := p.get("customer_email"):
-            qs = qs.filter(customer__user__email__icontains=v)
+            qs = qs.filter(customer__email__icontains=v)
         return _paginate(request, _channel_filter(qs, p.get("channel")), StaffSubscriptionSerializer)
 
 

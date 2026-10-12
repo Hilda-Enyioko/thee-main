@@ -225,7 +225,7 @@ def settle(reference: str, data: dict, source: str):
             renewal = txn.payment_type == Transaction.PAYMENT_TYPE.RENEWAL
             _fire_partner_webhooks(sub, "subscription.renewed" if renewal else "subscription.created", {
                 "subscription_id": str(sub.id), "plan": sub.plan.name,
-                "customer_email": sub.customer.user.email,
+                "customer_email": sub.customer.email,
                 "start_date": str(sub.start_date), "end_date": str(sub.end_date),
                 "amount_paid": str(sub.amount_paid), "status": "active",
                 "transaction_reference": txn.reference,
