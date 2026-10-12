@@ -25,7 +25,7 @@ from accounts.docs import (
     ONBOARD_REQ_EXAMPLES, OnboardResponse, PROFILE_EXAMPLE, ServiceAccountCreated,
 )
 from accounts.permissions import (
-    IsCustomer, IsHumanStaff, IsPartnerAdmin, IsStaffMember, IsSuperAdmin,
+    IsHumanStaff, IsPartnerAdmin, IsSuperAdmin,
 )
 from accounts.utils import get_partner_from_user, is_full_partner_admin
 from core.docs import (
@@ -375,11 +375,11 @@ class LoginView(APIView):
     throttle_classes = [IPRateThrottle]
 
     @extend_schema(
-        summary="Login (partner admins and customers)",
+        summary="Login (partner admins)",
         description=(
-            "Returns JWT tokens carrying `role` and `partner_id` claims. Staff must use `/staff/auth/login/`.\n\n"
-            "For customers the response includes `kyc_status` so the UI can gate purchasing "
-            "(`not_submitted` | `pending` | `approved` | `rejected`)."
+            "Returns JWT tokens carrying `role` and `partner_id` claims for partner portal users. "
+            "Customers do not log in; partners manage them through the Customer API with `X-Partner-Key`. "
+            "Staff must use `/staff/auth/login/`."
         ),
         auth=[],
         request=LoginSerializer,
@@ -387,10 +387,11 @@ class LoginView(APIView):
             200: LoginResponse,
             400: validation_error("email", "This field is required."),
             401: error("Wrong email or password.", "Invalid email or password."),
-            403: error("Staff account used the wrong endpoint.", "Staff accounts must log in via the staff login endpoint."),
+            403: error("Inactive account, or not a partner account.", "Account is inactive."),
         },
-        examples=[OpenApiExample("Request", request_only=True, value={"email": "ada@quickcover.ng", "password": "S3curePassw0rd!"})] + LOGIN_EXAMPLES,
-        tags=[Tag.PARTNERS, Tag.CUSTOMERS],
+        examples=[OpenApiExample("Request", request_only=True,
+                                 value={"email": "ada@quickcover.ng", "password": "S3curePassw0rd!"})] + LOGIN_EXAMPLES,
+        tags=[Tag.PARTNERS],
     )
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
@@ -401,13 +402,13 @@ class LoginView(APIView):
             return Response({"error": "Invalid email or password."}, status=status.HTTP_401_UNAUTHORIZED)
         if not user.is_active:
             return Response({"error": "Account is inactive."}, status=status.HTTP_403_FORBIDDEN)
-        if user.role in ("super_admin", "support_admin", "service_account"):
+        if user.role != "partner_admin":
             return Response({"error": "Staff accounts must log in via the staff login endpoint."},
                             status=status.HTTP_403_FORBIDDEN)
 
         partner = get_partner_from_user(user)
         return Response({"tokens": generate_tokens(user, partner_id=partner.id if partner else None),
-                    "role": user.role, "email": user.email, "first_name": user.first_name})
+                         "role": user.role, "email": user.email, "first_name": user.first_name})
 
 
 class TokenRefreshView(APIView):
@@ -423,7 +424,7 @@ class TokenRefreshView(APIView):
                    401: error("Invalid or expired token.", "Token is invalid or expired.")},
         examples=[OpenApiExample("Request", request_only=True, value={"refresh": "eyJhbGciOiJIUzI1NiIs..."}),
                   OpenApiExample("OK", response_only=True, status_codes=["200"], value={"access": "eyJhbGciOiJIUzI1NiIs..."})],
-        tags=[Tag.PARTNERS, Tag.CUSTOMERS],
+        tags=[Tag.PARTNERS],
     )
     def post(self, request):
         refresh_token = request.data.get("refresh")
@@ -546,7 +547,7 @@ KYC_LIST_ITEM = {"partner_id": "3f6c1f4e-8a58-4b6e-9a53-2d6a7f0d9c11", "partner_
 
 
 class StaffPartnerKYCReviewView(APIView):
-    permission_classes = [IsStaffMember]
+    permission_classes = [IsHumanStaff]
     throttle_classes = [PartnerRateThrottle]
 
     @extend_schema(

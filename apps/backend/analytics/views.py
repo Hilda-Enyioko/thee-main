@@ -1,14 +1,34 @@
-from rest_framework.views import APIView
-from rest_framework.response import Response
 from django.db.models import Count, Sum
+from django.db.models.functions import TruncMonth
+from django.utils import timezone
 from drf_spectacular.utils import extend_schema
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
-from subscriptions.models import PolicySubscription
-from accounts.permissions import IsProviderAdmin, IsDistributorAdmin
+from accounts.permissions import IsDistributorAdmin, IsProviderAdmin
+from accounts.utils import get_partner_from_user
 from core.throttles import PartnerRateThrottle
+from subscriptions.models import PolicySubscription
+
+def _six_months_ago():
+    now = timezone.now()
+    y, m = now.year, now.month - 5
+    if m < 1:
+        m, y = m + 12, y - 1
+    return now.replace(year=y, month=m, day=1, hour=0, minute=0, second=0, microsecond=0)
 
 
-# Helper
+def _monthly(qs, **aggregates):
+    """Last 6 calendar months, DB-agnostic. Returns [{"month": "2026-10", "count": n, **aggregates}]."""
+    rows = (qs.filter(created_at__gte=_six_months_ago())
+            .annotate(m=TruncMonth("created_at"))
+            .values("m")
+            .annotate(count=Count("id"), **aggregates)
+            .order_by("m"))
+    return [{"month": r["m"].strftime("%Y-%m"), "count": r["count"],
+             **{k: r[k] for k in aggregates}} for r in rows]
+
+
 def get_partner_from_user(user):
     if hasattr(user, 'partner_admin_profile'):
         return user.partner_admin_profile.partner
@@ -155,16 +175,8 @@ class ProviderSubscriptionsTrendsView(APIView):
     )
     def get(self, request):
         partner = get_partner_from_user(request.user)
-
-        trends = (
-            PolicySubscription.objects.filter(provider=partner)
-            .extra(select={'month': "strftime('%%Y-%%m', created_at)"})
-            .values('month')
-            .annotate(count=Count('id'), revenue=Sum('amount_paid'))
-            .order_by('month')
-        )
-
-        return Response({"trends": list(trends)})
+        qs = PolicySubscription.objects.filter(provider=partner)
+        return Response({"trends": _monthly(qs, revenue=Sum("amount_paid"))})
 
 
 # Distributor Analytics
@@ -229,8 +241,9 @@ class DistributorSummaryView(APIView):
         subscriptions = PolicySubscription.objects.filter(distributor=partner)
 
         summary = subscriptions.aggregate(
-            total_policies_facilitated=Count('id'),
-            total_commissions_earned=Sum('distributor_commission'),
+            total_policies_facilitated=Count("id"),
+            total_commissions_earned=Sum("distributor_commission"),
+            total_customers=Count("customer", distinct=True),
         )
 
         top_providers = (
@@ -246,7 +259,7 @@ class DistributorSummaryView(APIView):
         )
 
         return Response({
-            "summary": {**summary},
+            "summary": summary,
             "top_providers": list(top_providers),
             "top_plans": list(top_plans),
         })
@@ -287,13 +300,5 @@ class DistributorSubscriptionsTrendsView(APIView):
     )
     def get(self, request):
         partner = get_partner_from_user(request.user)
-
-        trends = (
-            PolicySubscription.objects.filter(distributor=partner)
-            .extra(select={'month': "strftime('%%Y-%%m', created_at)"})
-            .values('month')
-            .annotate(count=Count('id'), commissions=Sum('distributor_commission'))
-            .order_by('month')
-        )
-
-        return Response({"trends": list(trends)})
+        qs = PolicySubscription.objects.filter(distributor=partner)
+        return Response({"trends": _monthly(qs, commissions=Sum("distributor_commission"))})

@@ -13,7 +13,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.models import Customer
-from accounts.permissions import IsPartnerAdmin, IsStaffMember
+from accounts.permissions import IsPartnerAdmin, IsHumanStaff
 from accounts.utils import get_partner_from_user
 from core.api import IDEMPOTENCY_HEADER, PartnerKeyAPIView, idempotency_key
 from core.docs import PARTNER_KEY_AUTH, MessageSerializer, Tag, error, validation_error
@@ -647,7 +647,7 @@ class PartnerSubscriptionListView(APIView):
 
 # ================================================================ STAFF
 class StaffSubscriptionListView(APIView):
-    permission_classes = [IsStaffMember]
+    permission_classes = [IsHumanStaff]
     throttle_classes = [PartnerRateThrottle]
 
     @extend_schema(
@@ -684,7 +684,7 @@ class StaffSubscriptionListView(APIView):
 
 
 class StaffSubscriptionDetailView(APIView):
-    permission_classes = [IsStaffMember]
+    permission_classes = [IsHumanStaff]
     throttle_classes = [PartnerRateThrottle]
 
     @extend_schema(
