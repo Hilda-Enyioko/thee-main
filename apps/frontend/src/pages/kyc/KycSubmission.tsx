@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import LogoutButton from '../../components/LogoutButton';
@@ -15,6 +15,11 @@ export default function KycSubmission() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [kycStatus, setKycStatus] = useState<{status:string;review_note?:string} | null>(null);
+
+  useEffect(() => {
+    api.get('/partner/kyc/').then((r) => setKycStatus(r.data)).catch(() => undefined);
+  }, []);
 
   const validate = () => {
     const nextErrors: Record<string, string> = {};
@@ -74,23 +79,23 @@ export default function KycSubmission() {
       </header>
 
       <div className="kyc-card">
-        {submitted ? (
+        {submitted || (kycStatus && kycStatus.status !== 'rejected') ? (
           <div className="onboarding-success">
             <div className="verify-line" />
-            <h1>Documents submitted.</h1>
+            <h1>{kycStatus?.status === 'approved' ? 'Your business is verified.' : 'Documents submitted.'}</h1>
             <p>
-              Our team is reviewing your verification for <strong>{admin?.partnerName}</strong>.
-              We'll notify you once your account is approved and your API key is active.
+              {kycStatus?.status === 'approved' ? 'Your account and API key are active.' : <>Our team is reviewing your verification for <strong>{admin?.partnerName}</strong>. We'll notify you once your account is approved and your API key is active.</>}
             </p>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="onboarding-form" encType="multipart/form-data">
-            <h1>Verify your business</h1>
+            <h1>{kycStatus?.status === 'rejected' ? 'Update and resubmit your verification' : 'Verify your business'}</h1>
             <p className="form-subtext">
               Submit these documents to activate your account and your API key. This usually takes 1–2 business days.
             </p>
 
             {errors.general && <div className="form-error-banner">{errors.general}</div>}
+            {kycStatus?.review_note && <div className="form-error-banner">Review note: {kycStatus.review_note}</div>}
 
             <div className="field-row">
               <label>
