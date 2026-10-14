@@ -14,6 +14,7 @@ import KycSubmission from './pages/kyc/KycSubmission';
 import PartnerProfile from './pages/PartnerProfile';
 import ProviderAccessInbox from './pages/ProviderAccessInbox';
 import PartnerSubscriptions from './pages/PartnerSubscriptions';
+import ProviderClaims from './pages/ProviderClaims';
 
 export default function App() {
   return (
@@ -23,7 +24,6 @@ export default function App() {
           <Route path="/" element={<Landing />} />
           <Route path="/onboard" element={<Onboarding />} />
           <Route path="/login" element={<Login />} />
-
           <Route element={<ProtectedRoute />}>
             <Route path="/kyc" element={<KycSubmission />} />
             <Route path="/profile" element={<PartnerProfile />} />
@@ -31,6 +31,7 @@ export default function App() {
             <Route element={<RoleRoute allow="provider" />}>
               <Route path="/plans" element={<PlanManagement />} />
               <Route path="/access-inbox" element={<ProviderAccessInbox />} />
+              <Route path="/claims" element={<ProviderClaims />} />
             </Route>
             <Route element={<RoleRoute allow="distributor" />}>
               <Route path="/access-requests" element={<AccessRequests />} />

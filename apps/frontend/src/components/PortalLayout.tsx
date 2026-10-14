@@ -15,6 +15,7 @@ export default function PortalLayout({ title, eyebrow = 'Partner portal', childr
         <NavLink to="/analytics">Overview</NavLink>
         {provider ? <NavLink to="/plans">Plans</NavLink> : <NavLink to="/access-requests">Marketplace</NavLink>}
         {provider && <NavLink to="/access-inbox">Access inbox</NavLink>}
+        {provider && <NavLink to="/claims">Claims</NavLink>}
         <NavLink to="/subscriptions">Subscriptions</NavLink>
         <NavLink to="/profile">Profile</NavLink>
       </nav>
