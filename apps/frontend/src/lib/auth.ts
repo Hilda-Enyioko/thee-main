@@ -1,5 +1,6 @@
 const ACCESS_KEY = 'theeinsurance_access';
 const REFRESH_KEY = 'theeinsurance_refresh';
+const SESSION_KIND_KEY = 'theeinsurance_session_kind';
 
 export const getAccessToken = () => localStorage.getItem(ACCESS_KEY);
 export const getRefreshToken = () => localStorage.getItem(REFRESH_KEY);
@@ -8,10 +9,13 @@ export const setTokens = (access: string, refresh: string) => {
   localStorage.setItem(ACCESS_KEY, access);
   localStorage.setItem(REFRESH_KEY, refresh);
 };
+export const setSessionKind = (kind: 'partner' | 'staff') => localStorage.setItem(SESSION_KIND_KEY, kind);
+export const getSessionKind = () => localStorage.getItem(SESSION_KIND_KEY);
 
 export const clearTokens = () => {
   localStorage.removeItem(ACCESS_KEY);
   localStorage.removeItem(REFRESH_KEY);
+  localStorage.removeItem(SESSION_KIND_KEY);
 };
 
 export const refreshAccessToken = async (): Promise<string> => {

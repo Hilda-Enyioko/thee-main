@@ -15,6 +15,9 @@ import PartnerProfile from './pages/PartnerProfile';
 import ProviderAccessInbox from './pages/ProviderAccessInbox';
 import PartnerSubscriptions from './pages/PartnerSubscriptions';
 import ProviderClaims from './pages/ProviderClaims';
+import StaffLogin from './pages/StaffLogin';
+import StaffConsole from './pages/StaffConsole';
+import StaffRoute from './routes/StaffRoute';
 
 export default function App() {
   return (
@@ -24,6 +27,8 @@ export default function App() {
           <Route path="/" element={<Landing />} />
           <Route path="/onboard" element={<Onboarding />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/staff/login" element={<StaffLogin />} />
+          <Route element={<StaffRoute />}><Route path="/staff" element={<StaffConsole />} /></Route>
           <Route element={<ProtectedRoute />}>
             <Route path="/kyc" element={<KycSubmission />} />
             <Route path="/profile" element={<PartnerProfile />} />

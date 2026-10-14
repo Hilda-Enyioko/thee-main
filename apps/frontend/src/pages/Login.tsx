@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { api } from '../lib/api';
-import { setTokens } from '../lib/auth';
+import { setSessionKind, setTokens } from '../lib/auth';
 import { useAuth } from '../context/AuthContext';
 import './Login.css';
 import { SiteNav, SiteFooter } from '../components/SiteChrome';
@@ -30,6 +30,7 @@ export default function Login() {
       const loginResponse = await api.post('/auth/login/', { email, password });
       const { tokens } = loginResponse.data;
       setTokens(tokens.access, tokens.refresh);
+      setSessionKind('partner');
 
       // Partner-portal requests use the login session only. X-Partner-Key is
       // for a partner's customer storefront and must never be kept in this UI.
