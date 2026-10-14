@@ -120,6 +120,16 @@ export default function AccessRequests() {
     }
   };
 
+  const withdrawRequest = async (grantId: string) => {
+    try {
+      await api.post(`/partner/access-grants/${grantId}/withdraw/`);
+      showToast('Access request withdrawn.');
+      await fetchMyProviders();
+    } catch {
+      showToast('This request could not be withdrawn.');
+    }
+  };
+
   return (
     <div className="access-page">
       <header className="dashboard-header">
@@ -173,6 +183,7 @@ export default function AccessRequests() {
                         <span className={`status-pill status-${entry.status}`}>{STATUS_LABEL[entry.status]}</span>
                       </div>
                       <p className="access-meta">Requested {new Date(entry.requested_at).toLocaleDateString()}</p>
+                      {entry.status === 'pending' && <button className="btn-ghost" onClick={() => withdrawRequest(entry.id)}>Withdraw request</button>}
                     </div>
                   ))}
                 </div>

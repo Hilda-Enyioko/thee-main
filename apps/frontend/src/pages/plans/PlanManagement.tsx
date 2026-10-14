@@ -23,6 +23,7 @@ interface Plan {
   premium: string;
   duration_months: number;
   description: string;
+  visibility: 'private' | 'public';
   is_active: boolean;
   created_at: string;
 }
@@ -41,6 +42,7 @@ const emptyForm = {
   premium: '',
   duration_months: '12',
   description: '',
+  visibility: 'private' as 'private' | 'public',
 };
 
 export default function PlanManagement() {
@@ -107,6 +109,7 @@ export default function PlanManagement() {
       premium: plan.premium,
       duration_months: String(plan.duration_months),
       description: plan.description,
+      visibility: plan.visibility,
     });
     setEditingId(plan.id);
     setFormErrors({});
@@ -134,6 +137,7 @@ export default function PlanManagement() {
       premium: form.premium,
       duration_months: Number(form.duration_months),
       description: form.description,
+      visibility: form.visibility,
     };
 
     try {
@@ -221,6 +225,7 @@ export default function PlanManagement() {
                     {plan.is_active ? 'Published' : 'Draft'}
                   </span>
                   <span className="category-pill">{plan.category_name}</span>
+                  <span className="category-pill">{plan.visibility === 'public' ? 'Marketplace' : 'Private'}</span>
                 </div>
                 <h3>{plan.name}</h3>
                 <p className="plan-description">{plan.description}</p>
@@ -319,6 +324,15 @@ export default function PlanManagement() {
                 Description
                 <textarea rows={3} value={form.description} onChange={(e) => updateField('description', e.target.value)} />
                 {formErrors.description && <span className="field-error">{formErrors.description}</span>}
+              </label>
+
+              <label>
+                Distribution visibility
+                <select value={form.visibility} onChange={(e) => updateField('visibility', e.target.value)}>
+                  <option value="private">Private — only our direct customers</option>
+                  <option value="public">Marketplace — distributors can request access</option>
+                </select>
+                <span className="form-subtext">Public plans still require your approval before a distributor can sell them.</span>
               </label>
 
               <div className="step-actions">
