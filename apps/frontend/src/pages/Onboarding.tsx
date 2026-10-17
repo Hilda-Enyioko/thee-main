@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { api } from '../lib/api';
+import { setSessionKind, setTokens } from '../lib/auth';
+import { useAuth } from '../context/AuthContext';
 import './Onboarding.css';
 import { SiteNav, SiteFooter } from '../components/SiteChrome';
 
@@ -30,13 +32,13 @@ const initialDetails: BusinessDetails = {
 
 export default function Onboarding() {
   const navigate = useNavigate();
+  const { setAdmin } = useAuth();
   const [step, setStep] = useState<1 | 2>(1);
   const [details, setDetails] = useState<BusinessDetails>(initialDetails);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [apiKey, setApiKey] = useState('');
   const [keyCopied, setKeyCopied] = useState(false);
-  const [keySaved, setKeySaved] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
 
   const updateField = (field: keyof BusinessDetails, value: string) => {
@@ -76,8 +78,18 @@ export default function Onboarding() {
       });
 
       setApiKey(response.data.api_key);
+      setTokens(response.data.tokens.access, response.data.tokens.refresh);
+      setSessionKind('partner');
+      setAdmin({
+        partnerType: response.data.partner_type,
+        partnerName: details.name,
+        isActive: response.data.is_active,
+      });
       setConfirmed(true);
-      window.setTimeout(() => setStep(2), 680);
+      window.setTimeout(() => {
+        setStep(2);
+        window.setTimeout(() => navigate('/kyc', { replace: true }), 2000);
+      }, 680);
     } catch (err: unknown) {
       const apiErrors = (err as { response?: { data?: unknown } }).response?.data;
       if (apiErrors && typeof apiErrors === 'object') {
@@ -240,17 +252,7 @@ export default function Onboarding() {
               </button>
             </div>
 
-            <p className="onboarding-next-step">
-              Next, log in and submit your verification documents to activate your account.
-            </p>
-
-            <label className="key-confirmation">
-              <input type="checkbox" checked={keySaved} onChange={(e) => setKeySaved(e.target.checked)} />
-              I have saved this API key securely.
-            </label>
-            <button className="btn-primary" disabled={!keySaved} onClick={() => navigate('/login')}>
-              Continue to login
-            </button>
+            <p className="onboarding-next-step">Taking you to your verification workspace in a moment…</p>
           </div>
         )}
         </section>
