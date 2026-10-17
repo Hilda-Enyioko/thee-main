@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import LogoutButton from '../../components/LogoutButton';
@@ -6,6 +7,7 @@ import './KycSubmission.css';
 
 export default function KycSubmission() {
   const { admin } = useAuth();
+  const navigate = useNavigate();
   const [rcNumber, setRcNumber] = useState('');
   const [naicomNumber, setNaicomNumber] = useState('');
   const [tin, setTin] = useState('');
@@ -55,7 +57,10 @@ export default function KycSubmission() {
 
       await api.post('/partner/kyc/', formData);
       setConfirmed(true);
-      window.setTimeout(() => setSubmitted(true), 680);
+      window.setTimeout(() => {
+        setSubmitted(true);
+        window.setTimeout(() => navigate('/analytics', { replace: true }), 2000);
+      }, 680);
     } catch (err: any) {
       const apiErrors = err.response?.data;
       if (apiErrors && typeof apiErrors === 'object') {

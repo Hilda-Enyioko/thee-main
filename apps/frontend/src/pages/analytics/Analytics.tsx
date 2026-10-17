@@ -7,6 +7,16 @@ import './Analytics.css';
 export default function Analytics() {
   const { admin } = useAuth();
 
+  if (!admin?.isActive) {
+    return <PortalLayout title="Your workspace is ready" eyebrow="Verification in progress">
+      <p className="portal-section-intro">Your documents are with our verification team. You can review your business profile while we complete the checks.</p>
+      <section className="portal-card verification-dashboard">
+        <span className="verification-dashboard-icon">✓</span>
+        <div><h2>Submission received</h2><p>We’ll email you as soon as your account is approved. Plans, marketplace tools and analytics unlock automatically after verification.</p></div>
+      </section>
+    </PortalLayout>;
+  }
+
   return (
     <PortalLayout title="Performance overview" eyebrow="Analytics">
       <p className="portal-section-intro">

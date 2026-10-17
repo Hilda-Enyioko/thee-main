@@ -13,10 +13,13 @@ export default function PortalLayout({ title, eyebrow = 'Partner portal', childr
       <NavLink className="portal-brand" to="/analytics"><span>the</span>e<span>insurance</span></NavLink>
       <nav aria-label="Portal navigation">
         <NavLink to="/analytics">Overview</NavLink>
-        {provider ? <NavLink to="/plans">Plans</NavLink> : <NavLink to="/access-requests">Marketplace</NavLink>}
-        {provider && <NavLink to="/access-inbox">Access inbox</NavLink>}
-        {provider && <NavLink to="/claims">Claims</NavLink>}
-        <NavLink to="/subscriptions">Subscriptions</NavLink>
+        {!admin?.isActive && <NavLink to="/kyc">Verification</NavLink>}
+        {admin?.isActive && <>
+          {provider ? <NavLink to="/plans">Plans</NavLink> : <NavLink to="/access-requests">Marketplace</NavLink>}
+          {provider && <NavLink to="/access-inbox">Access inbox</NavLink>}
+          {provider && <NavLink to="/claims">Claims</NavLink>}
+          <NavLink to="/subscriptions">Subscriptions</NavLink>
+        </>}
         <NavLink to="/profile">Profile</NavLink>
       </nav>
       <div className="portal-rail-foot"><span className="portal-status-dot" /> Secure partner access</div>
