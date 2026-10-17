@@ -72,3 +72,5 @@
   .stat-row { grid-template-columns: 1fr; }
   .two-col { grid-template-columns: 1fr; }
 }
+
+.portal-content .stat-tile,.portal-content .chart-card,.portal-content .table-card{background:linear-gradient(145deg,rgba(18,40,67,.94),rgba(8,24,43,.94));border:1px solid rgba(159,194,236,.16);border-radius:18px;box-shadow:0 16px 36px rgba(0,0,0,.14)}.portal-content .stat-tile{padding:24px}.portal-content .stat-tile-label,.portal-content .table-card th{color:#91a7c0}.portal-content .stat-tile-value{color:#83b0ff}.portal-content .chart-card h2,.portal-content .table-card h2,.portal-content .table-card td{color:#eef5ff}.portal-content .table-card th{border-color:rgba(159,194,236,.13)}.portal-content .table-card td{border-color:rgba(159,194,236,.09)}

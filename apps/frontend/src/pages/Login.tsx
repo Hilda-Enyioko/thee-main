@@ -62,11 +62,19 @@ export default function Login() {
   };
 
   return (
-    <div className="login-page">
+    <div className="login-page auth-page">
       <SiteNav />
-      <div className="login-card">
-        <h1>Welcome back</h1>
-        <p className="form-subtext">Log in to manage your plans and view analytics.</p>
+      <main className="auth-shell">
+        <section className="auth-intro" aria-hidden="true">
+          <span className="auth-index">Partner portal / 01</span>
+          <div><p>Welcome to</p><h2>Insurance that<br /><em>moves with you.</em></h2></div>
+          <div className="auth-orbit"><i /><i /><i /><b>✦</b></div>
+          <small>Secure access for providers and distributors</small>
+        </section>
+        <div className="login-card auth-card">
+          <p className="onboarding-overline">Partner sign in</p>
+          <h1>Welcome back.</h1>
+          <p className="form-subtext">Sign in to manage your plans, partners and portfolio.</p>
 
         {error && <div className="form-error-banner">{error}</div>}
 
@@ -99,7 +107,8 @@ export default function Login() {
         <p className="form-footer-link">
           Don't have an account? <Link to="/onboard">Get started</Link>
         </p>
-      </div>
+        </div>
+      </main>
       <SiteFooter />
     </div>
   );

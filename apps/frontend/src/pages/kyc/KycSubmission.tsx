@@ -67,18 +67,17 @@ export default function KycSubmission() {
   };
 
   return (
-    <div className="kyc-page">
-      <header className="dashboard-header">
-        <div className="logo">
-          <span className="logo-mark">the</span>e<span className="logo-accent">insurance</span>
-        </div>
+    <div className="kyc-page registration-page">
+      <header className="registration-topbar">
+        <div className="registration-brand"><span>the</span>e<span>insurance</span></div>
         <div className="header-right">
           <span className="partner-name">{admin?.partnerName}</span>
           <LogoutButton />
         </div>
       </header>
-
-      <div className="kyc-card">
+      <main className="kyc-shell">
+        <aside className="kyc-intro"><span>Verification / 02</span><h2>Bring your<br /><em>business to life.</em></h2><p>We use these documents to activate your account and protect every business on the network.</p><ol><li><b>01</b> Business details</li><li className="active"><b>02</b> Verification documents</li><li><b>03</b> Review & activation</li></ol></aside>
+        <div className="kyc-card">
         {submitted || (kycStatus && kycStatus.status !== 'rejected') ? (
           <div className="onboarding-success">
             <div className="verify-line" />
@@ -162,7 +161,8 @@ export default function KycSubmission() {
             </button>
           </form>
         )}
-      </div>
+        </div>
+      </main>
     </div>
   );
 }

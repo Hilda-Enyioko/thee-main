@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api } from '../../lib/api';
-import { useAuth } from '../../context/AuthContext';
-import LogoutButton from '../../components/LogoutButton';
+import PortalLayout from '../../components/PortalLayout';
 import './AccessRequests.css';
 
 type AccessStatus = 'none' | 'pending' | 'approved' | 'rejected' | 'revoked' | 'withdrawn';
@@ -47,7 +46,6 @@ const STATUS_LABEL: Record<AccessStatus, string> = {
 };
 
 export default function AccessRequests() {
-  const { admin } = useAuth();
   const [tab, setTab] = useState<Tab>('my_providers');
 
   const [myProviders, setMyProviders] = useState<AccessEntry[]>([]);
@@ -131,18 +129,9 @@ export default function AccessRequests() {
   };
 
   return (
-    <div className="access-page">
-      <header className="dashboard-header">
-        <div className="logo">
-          <span className="logo-mark">the</span>e<span className="logo-accent">insurance</span>
-        </div>
-        <div className="header-right">
-          <span className="partner-name">{admin?.partnerName}</span>
-          <LogoutButton />
-        </div>
-      </header>
-
-      <div className="dashboard-body">
+    <PortalLayout title="Provider marketplace" eyebrow="Distribution access">
+      <p className="portal-section-intro">Build your catalogue by requesting permission to distribute a provider's plans.</p>
+      <div className="access-page">
         <div className="dashboard-toolbar">
           <div>
             <h1>Provider Access</h1>
@@ -272,6 +261,6 @@ export default function AccessRequests() {
           </>
         )}
       </div>
-    </div>
+    </PortalLayout>
   );
 }

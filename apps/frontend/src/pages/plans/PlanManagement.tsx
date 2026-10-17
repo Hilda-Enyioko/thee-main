@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../../lib/api';
-import { useAuth } from '../../context/AuthContext';
-import LogoutButton from '../../components/LogoutButton';
+import PortalLayout from '../../components/PortalLayout';
 import './PlanManagement.css';
 
 type CoverageLevel = 'third_party' | 'tp_fire_theft' | 'comprehensive' | 'standard';
@@ -46,7 +45,6 @@ const emptyForm = {
 };
 
 export default function PlanManagement() {
-  const { admin } = useAuth();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
@@ -175,18 +173,9 @@ export default function PlanManagement() {
   };
 
   return (
-    <div className="plan-management">
-      <header className="dashboard-header">
-        <div className="logo">
-          <span className="logo-mark">the</span>e<span className="logo-accent">insurance</span>
-        </div>
-        <div className="header-right">
-          <span className="partner-name">{admin?.partnerName}</span>
-          <LogoutButton />
-        </div>
-      </header>
-
-      <div className="dashboard-body">
+    <PortalLayout title="Plans" eyebrow="Provider catalogue">
+      <p className="portal-section-intro">Design, publish and maintain the plans your customers and approved distributors can access.</p>
+      <div className="plan-management">
         <div className="dashboard-toolbar">
           <div>
             <h1>Plans</h1>
@@ -345,6 +334,6 @@ export default function PlanManagement() {
           </div>
         </div>
       )}
-    </div>
+    </PortalLayout>
   );
 }
