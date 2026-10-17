@@ -37,6 +37,7 @@ export default function Onboarding() {
   const [apiKey, setApiKey] = useState('');
   const [keyCopied, setKeyCopied] = useState(false);
   const [keySaved, setKeySaved] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
 
   const updateField = (field: keyof BusinessDetails, value: string) => {
     setDetails((prev) => ({ ...prev, [field]: value }));
@@ -75,7 +76,8 @@ export default function Onboarding() {
       });
 
       setApiKey(response.data.api_key);
-      setStep(2);
+      setConfirmed(true);
+      window.setTimeout(() => setStep(2), 680);
     } catch (err: unknown) {
       const apiErrors = (err as { response?: { data?: unknown } }).response?.data;
       if (apiErrors && typeof apiErrors === 'object') {
@@ -211,8 +213,9 @@ export default function Onboarding() {
               </label>
             </div>
 
-            <button type="submit" className="btn-primary" disabled={submitting}>
-              {submitting ? 'Creating account...' : 'Create account'}
+            <button type="submit" className={`btn-primary confirm-button ${confirmed ? 'is-confirmed' : ''}`} disabled={submitting || confirmed}>
+              <span className="confirm-button-label">{submitting ? 'Creating account...' : confirmed ? 'Account created' : 'Create account'}</span>
+              <span className="confirm-button-check" aria-hidden="true">✓</span>
             </button>
 
             <p className="form-footer-link">

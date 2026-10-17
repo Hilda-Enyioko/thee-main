@@ -64,11 +64,12 @@ button, .btn-primary, .btn-secondary, .btn-ghost, .btn-danger { font-family: "Po
 input, textarea, select { font-family: "Poppins", sans-serif; border-radius: 12px; }
 button:hover, .btn-primary:hover, .btn-secondary:hover { transform: translateY(-2px); }
 
-/* The blue marker travels from the lower edge to the top on hover and naturally
-   returns along the same path when the pointer leaves. */
+/* Interactive hover: a soft blue disc rises through the control and reverses
+   smoothly when the pointer leaves, keeping labels readable above it. */
 button:not(:disabled) { position: relative; isolation: isolate; overflow: hidden; }
-button:not(:disabled)::after { content: ""; position: absolute; z-index: 2; left: 50%; bottom: -11px; width: 12px; height: 12px; border: 2px solid #78a9ff; border-radius: 50%; box-shadow: 0 0 0 3px rgba(58,120,235,.14), 0 0 16px rgba(77,143,255,.76); pointer-events: none; transform: translateX(-50%); opacity: .72; transition: bottom .46s cubic-bezier(.2,.8,.2,1), opacity .25s ease, box-shadow .35s ease; }
-button:not(:disabled):hover::after { bottom: calc(100% - 8px); opacity: 1; box-shadow: 0 0 0 4px rgba(58,120,235,.16), 0 0 20px rgba(77,143,255,.95); }
+button:not(:disabled)::after { content: ""; position: absolute; z-index: -1; left: 50%; bottom: -145%; width: 190%; aspect-ratio: 1; border-radius: 50%; background:radial-gradient(circle at 35% 30%,#8ec1ff 0 5%,#4285ec 28%,#2159c5 70%); box-shadow:0 -10px 32px rgba(66,133,236,.42); pointer-events: none; transform: translateX(-50%); transition:bottom .56s cubic-bezier(.2,.82,.22,1),box-shadow .4s ease; }
+button:not(:disabled):hover { color:#fff; border-color:#5f9eff; box-shadow:0 11px 26px rgba(32,89,197,.24); }
+button:not(:disabled):hover::after { bottom:-90%; box-shadow:0 -8px 34px rgba(86,151,255,.58); }
 button:disabled::after { display: none; }
 @media (prefers-reduced-motion: reduce) { button:not(:disabled)::after { transition: none; } }
 

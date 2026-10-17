@@ -15,6 +15,7 @@ export default function KycSubmission() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
   const [kycStatus, setKycStatus] = useState<{status:string;review_note?:string} | null>(null);
 
   useEffect(() => {
@@ -53,7 +54,8 @@ export default function KycSubmission() {
       formData.append('proof_of_address', proofOfAddress as File);
 
       await api.post('/partner/kyc/', formData);
-      setSubmitted(true);
+      setConfirmed(true);
+      window.setTimeout(() => setSubmitted(true), 680);
     } catch (err: any) {
       const apiErrors = err.response?.data;
       if (apiErrors && typeof apiErrors === 'object') {
@@ -156,8 +158,9 @@ export default function KycSubmission() {
               {errors.proof_of_address && <span className="field-error">{errors.proof_of_address}</span>}
             </label>
 
-            <button type="submit" className="btn-primary" disabled={submitting}>
-              {submitting ? 'Uploading...' : 'Submit for review'}
+            <button type="submit" className={`btn-primary confirm-button ${confirmed ? 'is-confirmed' : ''}`} disabled={submitting || confirmed}>
+              <span className="confirm-button-label">{submitting ? 'Uploading...' : confirmed ? 'Submitted' : 'Submit for review'}</span>
+              <span className="confirm-button-check" aria-hidden="true">✓</span>
             </button>
           </form>
         )}
