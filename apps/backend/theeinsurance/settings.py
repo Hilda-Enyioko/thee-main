@@ -58,6 +58,7 @@ INSTALLED_APPS = [
     # local apps
     'accounts',
     'analytics',
+    'automation',
     'claims',
     'core',
     'payments',
