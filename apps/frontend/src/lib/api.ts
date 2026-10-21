@@ -1,18 +1,17 @@
 import axios from 'axios';
-import { getAccessToken, getPartnerKey, refreshAccessToken, clearTokens } from './auth';
+import { getAccessToken, refreshAccessToken, clearTokens } from './auth';
 
 export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL,
+  // Always use the portal's origin. In development Vite proxies this path; in
+  // production Vercel rewrites it to Django. The browser never calls Django's
+  // cross-origin URL directly, so CORS is not part of the portal request path.
+  baseURL: '/api',
 });
 
 api.interceptors.request.use((config) => {
   const token = getAccessToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
-  }
-  const partnerKey = getPartnerKey();
-  if (partnerKey) {
-    config.headers['X-Partner-Key'] = partnerKey;
   }
   return config;
 });
@@ -25,6 +24,7 @@ api.interceptors.response.use(
       originalRequest._retry = true;
       try {
         const newToken = await refreshAccessToken();
+        originalRequest.headers = originalRequest.headers ?? {};
         originalRequest.headers.Authorization = `Bearer ${newToken}`;
         return api(originalRequest);
       } catch {

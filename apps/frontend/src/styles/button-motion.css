@@ -1,0 +1,7 @@
+/* Registration confirmation: label clears as a checkmark lands in the center. */
+.confirm-button{display:flex;align-items:center;justify-content:center;min-height:48px;isolation:isolate}
+.confirm-button-label{display:block;transition:transform .35s cubic-bezier(.2,.8,.2,1),opacity .22s ease}
+.confirm-button-check{position:absolute;display:grid;place-items:center;width:25px;height:25px;border-radius:50%;background:#fff;color:#1e65d9;font-size:14px;font-weight:900;opacity:0;transform:scale(.35) rotate(-28deg);transition:transform .42s cubic-bezier(.2,.9,.25,1.35),opacity .18s ease}
+.confirm-button.is-confirmed{background:#1c80c5;box-shadow:0 11px 24px rgba(26,110,197,.35)}
+.confirm-button.is-confirmed .confirm-button-label{opacity:0;transform:translateY(-14px)}
+.confirm-button.is-confirmed .confirm-button-check{opacity:1;transform:scale(1) rotate(0)}

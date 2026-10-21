@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import LogoutButton from '../../components/LogoutButton';
@@ -6,6 +7,7 @@ import './KycSubmission.css';
 
 export default function KycSubmission() {
   const { admin } = useAuth();
+  const navigate = useNavigate();
   const [rcNumber, setRcNumber] = useState('');
   const [naicomNumber, setNaicomNumber] = useState('');
   const [tin, setTin] = useState('');
@@ -15,6 +17,12 @@ export default function KycSubmission() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
+  const [kycStatus, setKycStatus] = useState<{status:string;review_note?:string} | null>(null);
+
+  useEffect(() => {
+    api.get('/partner/kyc/').then((r) => setKycStatus(r.data)).catch(() => undefined);
+  }, []);
 
   const validate = () => {
     const nextErrors: Record<string, string> = {};
@@ -22,6 +30,12 @@ export default function KycSubmission() {
     if (!tin.trim()) nextErrors.tax_identification_number = 'Enter your tax identification number.';
     if (!cacCertificate) nextErrors.cac_certificate = 'Upload your CAC certificate.';
     if (!proofOfAddress) nextErrors.proof_of_address = 'Upload proof of address.';
+    if (admin?.partnerType === 'provider' && !naicomNumber.trim()) {
+      nextErrors.naicom_licence_number = 'Enter your NAICOM licence number.';
+    }
+    if (admin?.partnerType === 'provider' && !naicomDoc) {
+      nextErrors.naicom_licence_doc = 'Upload your NAICOM licence document.';
+    }
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
   };
@@ -42,7 +56,11 @@ export default function KycSubmission() {
       formData.append('proof_of_address', proofOfAddress as File);
 
       await api.post('/partner/kyc/', formData);
-      setSubmitted(true);
+      setConfirmed(true);
+      window.setTimeout(() => {
+        setSubmitted(true);
+        window.setTimeout(() => navigate('/analytics', { replace: true }), 2000);
+      }, 680);
     } catch (err: any) {
       const apiErrors = err.response?.data;
       if (apiErrors && typeof apiErrors === 'object') {
@@ -56,35 +74,34 @@ export default function KycSubmission() {
   };
 
   return (
-    <div className="kyc-page">
-      <header className="dashboard-header">
-        <div className="logo">
-          <span className="logo-mark">the</span>e<span className="logo-accent">insurance</span>
-        </div>
+    <div className="kyc-page registration-page">
+      <header className="registration-topbar">
+        <div className="registration-brand"><span>the</span>e<span>insurance</span></div>
         <div className="header-right">
           <span className="partner-name">{admin?.partnerName}</span>
           <LogoutButton />
         </div>
       </header>
-
-      <div className="kyc-card">
-        {submitted ? (
+      <main className="kyc-shell">
+        <aside className="kyc-intro"><span>Verification / 02</span><h2>Bring your<br /><em>business to life.</em></h2><p>We use these documents to activate your account and protect every business on the network.</p><ol><li><b>01</b> Business details</li><li className="active"><b>02</b> Verification documents</li><li><b>03</b> Review & activation</li></ol></aside>
+        <div className="kyc-card">
+        {submitted || (kycStatus && kycStatus.status !== 'rejected') ? (
           <div className="onboarding-success">
             <div className="verify-line" />
-            <h1>Documents submitted.</h1>
+            <h1>{kycStatus?.status === 'approved' ? 'Your business is verified.' : 'Documents submitted.'}</h1>
             <p>
-              Our team is reviewing your verification for <strong>{admin?.partnerName}</strong>.
-              We'll notify you once your account is approved and your API key is active.
+              {kycStatus?.status === 'approved' ? 'Your account and API key are active.' : <>Our team is reviewing your verification for <strong>{admin?.partnerName}</strong>. We'll notify you once your account is approved and your API key is active.</>}
             </p>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="onboarding-form" encType="multipart/form-data">
-            <h1>Verify your business</h1>
+            <h1>{kycStatus?.status === 'rejected' ? 'Update and resubmit your verification' : 'Verify your business'}</h1>
             <p className="form-subtext">
               Submit these documents to activate your account and your API key. This usually takes 1–2 business days.
             </p>
 
             {errors.general && <div className="form-error-banner">{errors.general}</div>}
+            {kycStatus?.review_note && <div className="form-error-banner">Review note: {kycStatus.review_note}</div>}
 
             <div className="field-row">
               <label>
@@ -102,8 +119,9 @@ export default function KycSubmission() {
             </div>
 
             <label>
-              NAICOM licence number <span className="optional-tag">optional</span>
+              NAICOM licence number {admin?.partnerType !== 'provider' && <span className="optional-tag">optional</span>}
               <input type="text" value={naicomNumber} onChange={(e) => setNaicomNumber(e.target.value)} />
+              {errors.naicom_licence_number && <span className="field-error">{errors.naicom_licence_number}</span>}
             </label>
 
             <label className="file-label">
@@ -120,7 +138,7 @@ export default function KycSubmission() {
             </label>
 
             <label className="file-label">
-              NAICOM licence document <span className="optional-tag">optional</span>
+              NAICOM licence document {admin?.partnerType !== 'provider' && <span className="optional-tag">optional</span>}
               <div className="file-drop">
                 <input
                   type="file"
@@ -129,6 +147,7 @@ export default function KycSubmission() {
                 />
                 <span>{naicomDoc ? naicomDoc.name : 'Choose file'}</span>
               </div>
+              {errors.naicom_licence_doc && <span className="field-error">{errors.naicom_licence_doc}</span>}
             </label>
 
             <label className="file-label">
@@ -144,12 +163,14 @@ export default function KycSubmission() {
               {errors.proof_of_address && <span className="field-error">{errors.proof_of_address}</span>}
             </label>
 
-            <button type="submit" className="btn-primary" disabled={submitting}>
-              {submitting ? 'Uploading...' : 'Submit for review'}
+            <button type="submit" className={`btn-primary confirm-button ${confirmed ? 'is-confirmed' : ''}`} disabled={submitting || confirmed}>
+              <span className="confirm-button-label">{submitting ? 'Uploading...' : confirmed ? 'Submitted' : 'Submit for review'}</span>
+              <span className="confirm-button-check" aria-hidden="true">✓</span>
             </button>
           </form>
         )}
-      </div>
+        </div>
+      </main>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { api } from '../lib/api';
-import { setTokens, setPartnerKey } from '../lib/auth';
+import { setSessionKind, setTokens } from '../lib/auth';
 import { useAuth } from '../context/AuthContext';
 import './Login.css';
 import { SiteNav, SiteFooter } from '../components/SiteChrome';
@@ -30,13 +30,10 @@ export default function Login() {
       const loginResponse = await api.post('/auth/login/', { email, password });
       const { tokens } = loginResponse.data;
       setTokens(tokens.access, tokens.refresh);
+      setSessionKind('partner');
 
-      // Step 2: retrieve X-Partner-Key using the same password, while it's
-      // still in memory.
-      const keyResponse = await api.post('/partner/api-key/retrieve/', { password });
-      setPartnerKey(keyResponse.data.api_key);
-
-      // Step 3: fetch partner context
+      // Partner-portal requests use the login session only. X-Partner-Key is
+      // for a partner's customer storefront and must never be kept in this UI.
       const meResponse = await api.get('/partner/me/');
       const me = meResponse.data;
 
@@ -65,11 +62,19 @@ export default function Login() {
   };
 
   return (
-    <div className="login-page">
+    <div className="login-page auth-page">
       <SiteNav />
-      <div className="login-card">
-        <h1>Welcome back</h1>
-        <p className="form-subtext">Log in to manage your plans and view analytics.</p>
+      <main className="auth-shell">
+        <section className="auth-intro" aria-hidden="true">
+          <span className="auth-index">Partner portal / 01</span>
+          <div><p>Welcome to</p><h2>Insurance that<br /><em>moves with you.</em></h2></div>
+          <div className="auth-orbit"><i /><i /><i /><b>✦</b></div>
+          <small>Secure access for providers and distributors</small>
+        </section>
+        <div className="login-card auth-card">
+          <p className="onboarding-overline">Partner sign in</p>
+          <h1>Welcome back.</h1>
+          <p className="form-subtext">Sign in to manage your plans, partners and portfolio.</p>
 
         {error && <div className="form-error-banner">{error}</div>}
 
@@ -102,7 +107,8 @@ export default function Login() {
         <p className="form-footer-link">
           Don't have an account? <Link to="/onboard">Get started</Link>
         </p>
-      </div>
+        </div>
+      </main>
       <SiteFooter />
     </div>
   );

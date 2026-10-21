@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../../lib/api';
-import { useAuth } from '../../context/AuthContext';
-import LogoutButton from '../../components/LogoutButton';
+import PortalLayout from '../../components/PortalLayout';
 import './PlanManagement.css';
 
 type CoverageLevel = 'third_party' | 'tp_fire_theft' | 'comprehensive' | 'standard';
@@ -23,6 +22,7 @@ interface Plan {
   premium: string;
   duration_months: number;
   description: string;
+  visibility: 'private' | 'public';
   is_active: boolean;
   created_at: string;
 }
@@ -41,10 +41,10 @@ const emptyForm = {
   premium: '',
   duration_months: '12',
   description: '',
+  visibility: 'private' as 'private' | 'public',
 };
 
 export default function PlanManagement() {
-  const { admin } = useAuth();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
@@ -107,6 +107,7 @@ export default function PlanManagement() {
       premium: plan.premium,
       duration_months: String(plan.duration_months),
       description: plan.description,
+      visibility: plan.visibility,
     });
     setEditingId(plan.id);
     setFormErrors({});
@@ -134,6 +135,7 @@ export default function PlanManagement() {
       premium: form.premium,
       duration_months: Number(form.duration_months),
       description: form.description,
+      visibility: form.visibility,
     };
 
     try {
@@ -171,18 +173,9 @@ export default function PlanManagement() {
   };
 
   return (
-    <div className="plan-management">
-      <header className="dashboard-header">
-        <div className="logo">
-          <span className="logo-mark">the</span>e<span className="logo-accent">insurance</span>
-        </div>
-        <div className="header-right">
-          <span className="partner-name">{admin?.partnerName}</span>
-          <LogoutButton />
-        </div>
-      </header>
-
-      <div className="dashboard-body">
+    <PortalLayout title="Plans" eyebrow="Provider catalogue">
+      <p className="portal-section-intro">Design, publish and maintain the plans your customers and approved distributors can access.</p>
+      <div className="plan-management">
         <div className="dashboard-toolbar">
           <div>
             <h1>Plans</h1>
@@ -221,6 +214,7 @@ export default function PlanManagement() {
                     {plan.is_active ? 'Published' : 'Draft'}
                   </span>
                   <span className="category-pill">{plan.category_name}</span>
+                  <span className="category-pill">{plan.visibility === 'public' ? 'Marketplace' : 'Private'}</span>
                 </div>
                 <h3>{plan.name}</h3>
                 <p className="plan-description">{plan.description}</p>
@@ -321,6 +315,15 @@ export default function PlanManagement() {
                 {formErrors.description && <span className="field-error">{formErrors.description}</span>}
               </label>
 
+              <label>
+                Distribution visibility
+                <select value={form.visibility} onChange={(e) => updateField('visibility', e.target.value)}>
+                  <option value="private">Private — only our direct customers</option>
+                  <option value="public">Marketplace — distributors can request access</option>
+                </select>
+                <span className="form-subtext">Public plans still require your approval before a distributor can sell them.</span>
+              </label>
+
               <div className="step-actions">
                 <button type="button" className="btn-ghost" onClick={() => setShowForm(false)}>Cancel</button>
                 <button type="submit" className="btn-primary" disabled={submitting}>
@@ -331,6 +334,6 @@ export default function PlanManagement() {
           </div>
         </div>
       )}
-    </div>
+    </PortalLayout>
   );
 }

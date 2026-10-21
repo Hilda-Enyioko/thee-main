@@ -1,25 +1,23 @@
 import { useState, useEffect } from 'react';
 import { api } from '../../lib/api';
-import { useAuth } from '../../context/AuthContext';
-import LogoutButton from '../../components/LogoutButton';
+import PortalLayout from '../../components/PortalLayout';
 import './AccessRequests.css';
 
-type AccessStatus = 'not_requested' | 'pending' | 'approved' | 'rejected';
+type AccessStatus = 'none' | 'pending' | 'approved' | 'rejected' | 'revoked' | 'withdrawn';
 
 interface AccessEntry {
   id: string;
   provider: string;
   provider_name: string;
   status: AccessStatus;
-  is_active: boolean;
-  granted_at: string;
+  requested_at: string;
 }
 
 interface BrowseProvider {
   id: string;
   name: string;
   slug: string;
-  access_status: AccessStatus;
+  access: { status: AccessStatus; via: 'provider' | 'plan' | null };
 }
 
 interface BrowsePlan {
@@ -33,20 +31,21 @@ interface BrowsePlan {
   premium: string;
   duration_months: number;
   description: string;
-  access_status: AccessStatus;
+  access: { status: AccessStatus; via: 'provider' | 'plan' | null };
 }
 
 type Tab = 'my_providers' | 'browse_providers' | 'browse_plans';
 
 const STATUS_LABEL: Record<AccessStatus, string> = {
-  not_requested: 'Not requested',
+  none: 'Not requested',
   pending: 'Pending',
   approved: 'Approved',
   rejected: 'Rejected',
+  revoked: 'Revoked',
+  withdrawn: 'Withdrawn',
 };
 
 export default function AccessRequests() {
-  const { admin } = useAuth();
   const [tab, setTab] = useState<Tab>('my_providers');
 
   const [myProviders, setMyProviders] = useState<AccessEntry[]>([]);
@@ -58,20 +57,19 @@ export default function AccessRequests() {
   const [toast, setToast] = useState<string | null>(null);
 
   const fetchMyProviders = async () => {
-    const res = await api.get('/partner/providers/');
-    console.log('my providers response:', res.data);
-    setMyProviders(res.data ?? []);
+    const res = await api.get('/partner/access-grants/');
+    setMyProviders(res.data.access_grants ?? []);
   };
 
   const fetchBrowseProviders = async () => {
-    const res = await api.get('/partner/providers/browse/');
-    setBrowseProviders(res.data);
+    const res = await api.get('/distributor/marketplace/providers/');
+    setBrowseProviders(res.data.providers ?? []);
   };
 
   const fetchBrowsePlans = async (providerId?: string) => {
-    const params = providerId ? { provider: providerId } : {};
-    const res = await api.get('/partner/providers/plans/', { params });
-    setBrowsePlans(res.data);
+    const params = providerId ? { provider_id: providerId } : {};
+    const res = await api.get('/distributor/marketplace/plans/', { params });
+    setBrowsePlans(res.data.plans ?? []);
   };
 
   const loadTab = async (nextTab: Tab) => {
@@ -98,10 +96,14 @@ export default function AccessRequests() {
     setTimeout(() => setToast(null), 3000);
   };
 
-  const handleRequestAccess = async (providerId: string) => {
+  const handleRequestAccess = async (providerId: string, planId?: string) => {
     setRequestingId(providerId);
     try {
-      await api.post('/partner/providers/request-access/', { provider: providerId });
+      await api.post('/partner/access-grants/', {
+        provider_id: providerId,
+        scope: planId ? 'plan' : 'provider',
+        ...(planId ? { plan_id: planId } : {}),
+      });
       showToast('Access requested. We\u2019ll notify you once the provider reviews it.');
       await fetchBrowseProviders();
       if (tab === 'browse_plans') await fetchBrowsePlans(providerFilter || undefined);
@@ -116,19 +118,20 @@ export default function AccessRequests() {
     }
   };
 
-  return (
-    <div className="access-page">
-      <header className="dashboard-header">
-        <div className="logo">
-          <span className="logo-mark">the</span>e<span className="logo-accent">insurance</span>
-        </div>
-        <div className="header-right">
-          <span className="partner-name">{admin?.partnerName}</span>
-          <LogoutButton />
-        </div>
-      </header>
+  const withdrawRequest = async (grantId: string) => {
+    try {
+      await api.post(`/partner/access-grants/${grantId}/withdraw/`);
+      showToast('Access request withdrawn.');
+      await fetchMyProviders();
+    } catch {
+      showToast('This request could not be withdrawn.');
+    }
+  };
 
-      <div className="dashboard-body">
+  return (
+    <PortalLayout title="Provider marketplace" eyebrow="Distribution access">
+      <p className="portal-section-intro">Build your catalogue by requesting permission to distribute a provider's plans.</p>
+      <div className="access-page">
         <div className="dashboard-toolbar">
           <div>
             <h1>Provider Access</h1>
@@ -168,7 +171,8 @@ export default function AccessRequests() {
                         <h3>{entry.provider_name}</h3>
                         <span className={`status-pill status-${entry.status}`}>{STATUS_LABEL[entry.status]}</span>
                       </div>
-                      <p className="access-meta">Requested {new Date(entry.granted_at).toLocaleDateString()}</p>
+                      <p className="access-meta">Requested {new Date(entry.requested_at).toLocaleDateString()}</p>
+                      {entry.status === 'pending' && <button className="btn-ghost" onClick={() => withdrawRequest(entry.id)}>Withdraw request</button>}
                     </div>
                   ))}
                 </div>
@@ -181,25 +185,16 @@ export default function AccessRequests() {
                   <div className="access-card" key={p.id}>
                     <div className="access-card-top">
                       <h3>{p.name}</h3>
-                      <span className={`status-pill status-${p.access_status}`}>{STATUS_LABEL[p.access_status]}</span>
+                      <span className={`status-pill status-${p.access.status}`}>{STATUS_LABEL[p.access.status]}</span>
                     </div>
                     <div className="access-card-actions">
-                      {p.access_status === 'not_requested' && (
+                      {(p.access.status === 'none' || p.access.status === 'rejected' || p.access.status === 'revoked' || p.access.status === 'withdrawn') && (
                         <button
                           className="btn-primary"
                           disabled={requestingId === p.id}
                           onClick={() => handleRequestAccess(p.id)}
                         >
-                          {requestingId === p.id ? 'Requesting...' : 'Request access'}
-                        </button>
-                      )}
-                      {p.access_status === 'rejected' && (
-                        <button
-                          className="btn-ghost"
-                          disabled={requestingId === p.id}
-                          onClick={() => handleRequestAccess(p.id)}
-                        >
-                          {requestingId === p.id ? 'Requesting...' : 'Request again'}
+                          {requestingId === p.id ? 'Requesting...' : p.access.status === 'none' ? 'Request access' : 'Request again'}
                         </button>
                       )}
                       <button
@@ -229,7 +224,7 @@ export default function AccessRequests() {
                   {browsePlans.map((plan) => (
                     <div className="plan-card" key={plan.id}>
                       <div className="plan-card-top">
-                        <span className={`status-pill status-${plan.access_status}`}>{STATUS_LABEL[plan.access_status]}</span>
+                        <span className={`status-pill status-${plan.access.status}`}>{STATUS_LABEL[plan.access.status]}</span>
                         <span className="category-pill">{plan.category_name}</span>
                       </div>
                       <h3>{plan.name}</h3>
@@ -249,11 +244,11 @@ export default function AccessRequests() {
                           <span className="figure-value">{plan.duration_months} mo</span>
                         </div>
                       </div>
-                      {plan.access_status === 'not_requested' && (
+                      {(plan.access.status === 'none' || plan.access.status === 'rejected' || plan.access.status === 'revoked' || plan.access.status === 'withdrawn') && (
                         <button
                           className="btn-primary"
                           disabled={requestingId === plan.provider}
-                          onClick={() => handleRequestAccess(plan.provider)}
+                          onClick={() => handleRequestAccess(plan.provider, plan.id)}
                         >
                           {requestingId === plan.provider ? 'Requesting...' : 'Request access to sell this'}
                         </button>
@@ -266,6 +261,6 @@ export default function AccessRequests() {
           </>
         )}
       </div>
-    </div>
+    </PortalLayout>
   );
 }

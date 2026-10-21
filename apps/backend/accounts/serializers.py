@@ -10,6 +10,21 @@ from rest_framework import serializers
 from core.models import DistributorProfile, Partner, ProviderProfile
 from .models import CustomUser, PartnerAdmin, PartnerKYC, Staff
 
+
+def _unique_slug(name: str) -> str:
+    """Return a unique, valid slug for a newly onboarded partner."""
+    base = slugify(name)[:42] or "partner"
+    candidate = base
+    suffix = 2
+
+    while Partner.objects.filter(slug=candidate).exists():
+        suffix_text = f"-{suffix}"
+        candidate = f"{base[:50 - len(suffix_text)]}{suffix_text}"
+        suffix += 1
+
+    return candidate
+
+
 class PartnerOnboardingSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=255)
     partner_type = serializers.ChoiceField(choices=Partner.PARTNER_TYPE_CHOICES)

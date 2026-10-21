@@ -1,3 +1,9 @@
 {
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "https://theeinsurance-backend-staging.onrender.com/api/v1/$1"
+    },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
 }

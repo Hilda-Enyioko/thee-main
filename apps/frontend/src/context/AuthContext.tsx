@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { api } from '../lib/api';
-import { getAccessToken, clearTokens } from '../lib/auth';
+import { getAccessToken, getSessionKind, clearTokens } from '../lib/auth';
 
 type PartnerType = 'provider' | 'distributor';
 
@@ -29,6 +29,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const hydrate = async () => {
       const token = getAccessToken();
       if (!token) {
+        setLoading(false);
+        return;
+      }
+      if (getSessionKind() === 'staff') {
         setLoading(false);
         return;
       }
