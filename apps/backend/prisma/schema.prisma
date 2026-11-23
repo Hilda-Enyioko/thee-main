@@ -1,0 +1,32 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum PartnerType {
+  PROVIDER
+  DISTRIBUTOR_STAFF
+  DISTRIBUTOR_API
+}
+
+enum PartnerStatus {
+  PENDING_KYC
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+model Partner {
+  id        String        @id @default(uuid(7)) @db.Uuid
+  name      String
+  type      PartnerType
+  status    PartnerStatus @default(PENDING_KYC)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@map("partners")
+}

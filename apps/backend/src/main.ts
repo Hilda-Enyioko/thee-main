@@ -19,8 +19,7 @@ async function bootstrap() {
     .filter(Boolean);
   app.enableCors({ origin: origins, credentials: true });
 
-  // Versioned API; /health stays at the root for Render's health check
-  app.setGlobalPrefix('api/v1', { exclude: ['health'] });
+  app.setGlobalPrefix('api/v1', { exclude: ['health', 'health/db'] });
 
   app.useGlobalPipes(
     new ValidationPipe({
