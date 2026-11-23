@@ -1,3 +1,13 @@
+# Dependencies and build output
+node_modules
+dist
+*.tsbuildinfo
 
-# NestJS Observe key pair
+# Secrets (commit .env.example instead)
 .env
+.env.*
+!.env.example
+
+# Logs and OS files
+*.log
+.DS_Store
