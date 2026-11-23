@@ -33,7 +33,7 @@ async function bootstrap() {
   // Let Nest close DB and Redis connections cleanly on SIGTERM (Render deploys)
   app.enableShutdownHooks();
 
-  if (config.get('NODE_ENV', { infer: true }) !== 'production') {
+  if (config.get('NODE_ENV', { infer: true })) {
     const document = SwaggerModule.createDocument(
       app,
       new DocumentBuilder()

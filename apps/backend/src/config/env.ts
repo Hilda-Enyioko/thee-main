@@ -6,6 +6,10 @@ const envSchema = z.object({
     .default('development'),
   PORT: z.coerce.number().int().positive().default(3000),
   CORS_ORIGINS: z.string().default(''),
+  SWAGGER_ENABLED: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
 });
 
 export type Env = z.infer<typeof envSchema>;
