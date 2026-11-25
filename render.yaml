@@ -12,8 +12,7 @@ services:
     region: virginia
     plan: starter
     rootDir: apps/backend
-    buildCommand: pnpm install --frozen-lockfile --prod=false && pnpm prisma:generate && pnpm build
-    preDeployCommand: pnpm prisma:deploy
+    buildCommand: pnpm install --frozen-lockfile --prod=false && pnpm prisma:generate && pnpm prisma:deploy && pnpm build
     startCommand: pnpm start:prod
     healthCheckPath: /health
     envVars:
