@@ -11,6 +11,7 @@ const envSchema = z.object({
     .default('false')
     .transform((v) => v === 'true'),
   DATABASE_URL: z.string().startsWith('postgresql://'),
+  REDIS_URL: z.string().regex(/^rediss?:\/\//, 'must start with redis:// or rediss://'),
 });
 
 export type Env = z.infer<typeof envSchema>;

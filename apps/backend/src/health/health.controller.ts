@@ -1,11 +1,17 @@
 import { Controller, Get } from '@nestjs/common';
 import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { PrismaService } from '../prisma/prisma.service';
+import { InjectQueue } from '@nestjs/bullmq';
+import { QUEUES } from '../queue/queue.constants';
+import type { Queue } from 'bullmq';
 
 @ApiTags('Health')
 @Controller('health')
 export class HealthController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @InjectQueue(QUEUES.NOTIFICATIONS) private readonly notifications: Queue,
+  ) {}
 
   @Get()
   @ApiOkResponse({ description: 'Service is up' })
@@ -22,5 +28,12 @@ export class HealthController {
   async db() {
     await this.prisma.$queryRaw`SELECT 1`;
     return { status: 'ok', database: 'up' };
+  }
+
+  @Get('queue')
+  @ApiOkResponse({ description: 'Redis is reachable and a job can be enqueued' })
+  async queue() {
+    const job = await this.notifications.add('smoke-test', { at: Date.now() });
+    return { status: 'ok', redis: 'up', jobId: job.id };
   }
 }

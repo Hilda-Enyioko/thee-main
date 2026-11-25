@@ -19,17 +19,18 @@ async function bootstrap() {
     .filter(Boolean);
   app.enableCors({ origin: origins, credentials: true });
 
-  app.setGlobalPrefix('api/v1', { exclude: ['health', 'health/db'] });
+  app.setGlobalPrefix('api/v1', {
+    exclude: ['health', 'health/db', 'health/queue'],
+  });
 
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true, // strip unknown properties
-      forbidNonWhitelisted: true, // reject them instead of silently ignoring
-      transform: true, // turn payloads into DTO instances
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
     }),
   );
 
-  // Let Nest close DB and Redis connections cleanly on SIGTERM (Render deploys)
   app.enableShutdownHooks();
 
   if (config.get('NODE_ENV', { infer: true })) {
@@ -44,7 +45,6 @@ async function bootstrap() {
     SwaggerModule.setup('docs', app, document);
   }
 
-  // 0.0.0.0 so Render can reach the container
   await app.listen(config.get('PORT', { infer: true }), '0.0.0.0');
 }
 
