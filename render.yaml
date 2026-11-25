@@ -1,0 +1,59 @@
+services:
+  - type: keyvalue
+    name: thee-redis
+    plan: free
+    region: virginia
+    maxmemoryPolicy: noeviction
+    ipAllowList: []
+
+  - type: web
+    name: thee-main
+    runtime: node
+    region: virginia
+    plan: starter
+    rootDir: apps/backend
+    buildCommand: pnpm install --frozen-lockfile --prod=false && pnpm prisma:generate && pnpm build
+    preDeployCommand: pnpm prisma:deploy
+    startCommand: pnpm start:prod
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: 24.15.0
+      - key: NODE_ENV
+        value: production
+      - key: SWAGGER_ENABLED
+        value: "true"
+      - key: CORS_ORIGINS
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: thee-redis
+          property: connectionString
+
+  - type: worker
+    name: thee-worker
+    runtime: node
+    region: virginia
+    plan: starter
+    rootDir: apps/backend
+    buildCommand: pnpm install --frozen-lockfile --prod=false && pnpm prisma:generate && pnpm build
+    startCommand: pnpm start:worker:prod
+    envVars:
+      - key: NODE_VERSION
+        value: 24.15.0
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: thee-redis
+          property: connectionString
