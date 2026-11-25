@@ -9,8 +9,10 @@ import { ConfigService } from '@nestjs/config';
 import { ApiHeader, ApiOkResponse } from '@nestjs/swagger';
 import { PrismaService } from '../prisma/prisma.service';
 import { HealthGuard } from './health.guard';
+import { Public } from '../auth/auth.decorators';
 
 @Controller('health')
+@Public()
 export class HealthController {
   constructor(
     private readonly prisma: PrismaService,

@@ -12,6 +12,10 @@ const envSchema = z.object({
     .transform((v) => v === 'true'),
   DATABASE_URL: z.string().startsWith('postgresql://'),
   REDIS_URL: z.string().regex(/^rediss?:\/\//, 'must start with redis:// or rediss://'),
+  JWT_ACCESS_SECRET: z.string().min(32),
+  JWT_REFRESH_SECRET: z.string().min(32),
+  JWT_ACCESS_TTL_SECONDS: z.coerce.number().int().positive().default(900),
+  JWT_REFRESH_TTL_SECONDS: z.coerce.number().int().positive().default(604800),
 });
 
 export type Env = z.infer<typeof envSchema>;
