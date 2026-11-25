@@ -1,16 +1,18 @@
-import { Controller, Get } from '@nestjs/common';
-import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
+import {
+  Controller,
+  Get,
+  ServiceUnavailableException,
+} from '@nestjs/common';
+import Redis from 'ioredis';
+import { ConfigService } from '@nestjs/config';
+import { ApiOkResponse } from '@nestjs/swagger';
 import { PrismaService } from '../prisma/prisma.service';
-import { InjectQueue } from '@nestjs/bullmq';
-import { QUEUES } from '../queue/queue.constants';
-import type { Queue } from 'bullmq';
 
-@ApiTags('Health')
 @Controller('health')
 export class HealthController {
   constructor(
     private readonly prisma: PrismaService,
-    @InjectQueue(QUEUES.NOTIFICATIONS) private readonly notifications: Queue,
+    private readonly configService: ConfigService,
   ) {}
 
   @Get()
@@ -31,9 +33,34 @@ export class HealthController {
   }
 
   @Get('queue')
-  @ApiOkResponse({ description: 'Redis is reachable and a job can be enqueued' })
+  @ApiOkResponse({ description: 'Redis is reachable' })
   async queue() {
-    const job = await this.notifications.add('smoke-test', { at: Date.now() });
-    return { status: 'ok', redis: 'up', jobId: job.id };
+    const redis = new Redis(
+      this.configService.getOrThrow<string>('REDIS_URL'),
+      {
+        connectTimeout: 3000,
+        maxRetriesPerRequest: 1,
+        enableOfflineQueue: false,
+        retryStrategy: () => null,
+      },
+    );
+
+    try {
+      const response = await redis.ping();
+
+      if (response !== 'PONG') {
+        throw new Error('Unexpected Redis response');
+      }
+
+      return { status: 'ok', redis: 'up' };
+    } catch {
+      throw new ServiceUnavailableException({
+        status: 'error',
+        redis: 'down',
+        message: 'Redis health check failed',
+      });
+    } finally {
+      redis.disconnect();
+    }
   }
 }
