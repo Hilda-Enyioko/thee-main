@@ -2,11 +2,13 @@ import {
   Controller,
   Get,
   ServiceUnavailableException,
+  UseGuards,
 } from '@nestjs/common';
 import Redis from 'ioredis';
 import { ConfigService } from '@nestjs/config';
-import { ApiOkResponse } from '@nestjs/swagger';
+import { ApiHeader, ApiOkResponse } from '@nestjs/swagger';
 import { PrismaService } from '../prisma/prisma.service';
+import { HealthGuard } from './health.guard';
 
 @Controller('health')
 export class HealthController {
@@ -26,6 +28,8 @@ export class HealthController {
   }
 
   @Get('db')
+  @UseGuards(HealthGuard)
+  @ApiHeader({ name: 'x-health-secret', required: true })
   @ApiOkResponse({ description: 'Database is reachable' })
   async db() {
     await this.prisma.$queryRaw`SELECT 1`;
@@ -33,6 +37,8 @@ export class HealthController {
   }
 
   @Get('queue')
+  @UseGuards(HealthGuard)
+  @ApiHeader({ name: 'x-health-secret', required: true })
   @ApiOkResponse({ description: 'Redis is reachable' })
   async queue() {
     const redis = new Redis(
