@@ -1,7 +1,6 @@
 import {
   Controller,
   Get,
-  ServiceUnavailableException,
 } from '@nestjs/common';
 import Redis from 'ioredis';
 import { ConfigService } from '@nestjs/config';
@@ -49,16 +48,10 @@ export class HealthController {
       const response = await redis.ping();
 
       if (response !== 'PONG') {
-        throw new Error('Unexpected Redis response');
+        throw new Error(`Unexpected Redis response: ${response}`);
       }
 
       return { status: 'ok', redis: 'up' };
-    } catch {
-      throw new ServiceUnavailableException({
-        status: 'error',
-        redis: 'down',
-        message: 'Redis health check failed',
-      });
     } finally {
       redis.disconnect();
     }
