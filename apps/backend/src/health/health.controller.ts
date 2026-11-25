@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import Redis from 'ioredis';
 import { ConfigService } from '@nestjs/config';
@@ -31,12 +32,13 @@ export class HealthController {
     return { status: 'ok', database: 'up' };
   }
 
-  @Get('queue')
+@Get('queue')
   @ApiOkResponse({ description: 'Redis is reachable' })
   async queue() {
     const redis = new Redis(
       this.configService.getOrThrow<string>('REDIS_URL'),
       {
+        lazyConnect: true,
         connectTimeout: 3000,
         maxRetriesPerRequest: 1,
         enableOfflineQueue: false,
@@ -44,7 +46,10 @@ export class HealthController {
       },
     );
 
+    redis.on('error', () => {});
+
     try {
+      await redis.connect();
       const response = await redis.ping();
 
       if (response !== 'PONG') {
@@ -52,6 +57,12 @@ export class HealthController {
       }
 
       return { status: 'ok', redis: 'up' };
+    } catch (error) {
+      throw new ServiceUnavailableException({
+        status: 'error',
+        redis: 'down',
+        message: error instanceof Error ? error.message : String(error),
+      });
     } finally {
       redis.disconnect();
     }
