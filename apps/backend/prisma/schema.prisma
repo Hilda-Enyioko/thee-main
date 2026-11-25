@@ -7,26 +7,372 @@ datasource db {
   provider = "postgresql"
 }
 
-enum PartnerType {
-  PROVIDER
-  DISTRIBUTOR_STAFF
-  DISTRIBUTOR_API
+// ───────────── Enums ─────────────
+
+enum UserStatus {
+  ACTIVE
+  DEACTIVATED
+  SUSPENDED
+}
+
+enum StaffRole {
+  SUPER_ADMIN
+  ADMIN
+  KYC_REVIEWER
+  SUPPORT
+}
+
+enum OrgUserRole {
+  ADMIN
+  MEMBER
 }
 
 enum PartnerStatus {
   PENDING_KYC
+  UNDER_REVIEW
   APPROVED
   REJECTED
   SUSPENDED
 }
 
-model Partner {
-  id        String        @id @default(uuid(7)) @db.Uuid
-  name      String
-  type      PartnerType
-  status    PartnerStatus @default(PENDING_KYC)
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
+enum DistributorType {
+  DEALER_SHOP // Type A: dealers and shops using the staff dashboard
+  API_PARTNER // Type B: banks, fintechs and large distributors using the API
+}
 
-  @@map("partners")
+enum KycStatus {
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+enum ProductType {
+  MOTOR
+  GADGET
+}
+
+enum ProductStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum GrantStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  REVOKED
+}
+
+enum KeyMode {
+  SANDBOX
+  LIVE
+}
+
+enum ActorType {
+  SYSTEM
+  STAFF
+  PROVIDER_USER
+  DISTRIBUTOR_USER
+  CUSTOMER
+}
+
+// ───────────── Staff (TheeInsurance) ─────────────
+
+model StaffUser {
+  id           String     @id @default(uuid(7)) @db.Uuid
+  email        String     @unique
+  passwordHash String     @map("password_hash")
+  fullName     String     @map("full_name")
+  role         StaffRole
+  status       UserStatus @default(ACTIVE)
+  tokenVersion Int        @default(0) @map("token_version") // bump to revoke every token
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+
+  providerKycReviews    ProviderKyc[]
+  distributorKycReviews DistributorKyc[]
+
+  @@map("staff_users")
+}
+
+// ───────────── Providers ─────────────
+
+model Provider {
+  id          String        @id @default(uuid(7)) @db.Uuid
+  legalName   String        @map("legal_name")
+  tradingName String?       @map("trading_name")
+  rcNumber    String        @unique @map("rc_number")
+  email       String        @unique
+  phone       String
+  address     String?
+  status      PartnerStatus @default(PENDING_KYC)
+
+  settlementBankName      String? @map("settlement_bank_name")
+  settlementAccountNumber String? @map("settlement_account_number")
+  settlementAccountName   String? @map("settlement_account_name")
+
+  adapterKey String @default("sandbox") @map("adapter_key")
+
+  users     ProviderUser[]
+  kyc       ProviderKyc[]
+  products  Product[]
+  grants    DistributorAccessGrant[]
+  customers CustomerProvider[]
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("providers")
+}
+
+model ProviderUser {
+  id           String      @id @default(uuid(7)) @db.Uuid
+  providerId   String      @map("provider_id") @db.Uuid
+  email        String      @unique
+  passwordHash String      @map("password_hash")
+  fullName     String      @map("full_name")
+  role         OrgUserRole @default(MEMBER)
+  status       UserStatus  @default(ACTIVE)
+  tokenVersion Int         @default(0) @map("token_version")
+  provider     Provider    @relation(fields: [providerId], references: [id])
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+
+  @@index([providerId])
+  @@map("provider_users")
+}
+
+model ProviderKyc {
+  id           String     @id @default(uuid(7)) @db.Uuid
+  providerId   String     @map("provider_id") @db.Uuid
+  status       KycStatus  @default(SUBMITTED)
+  details      Json
+  documents    Json // [{ kind, publicId }] Cloudinary references only
+  reviewedById String?    @map("reviewed_by_id") @db.Uuid
+  reviewNote   String?    @map("review_note")
+  reviewedAt   DateTime?  @map("reviewed_at")
+  createdAt    DateTime   @default(now()) @map("created_at")
+  provider     Provider   @relation(fields: [providerId], references: [id])
+  reviewedBy   StaffUser? @relation(fields: [reviewedById], references: [id])
+
+  @@index([providerId, createdAt])
+  @@index([status])
+  @@map("provider_kyc")
+}
+
+// ───────────── Distributors ─────────────
+
+model Distributor {
+  id          String          @id @default(uuid(7)) @db.Uuid
+  type        DistributorType
+  legalName   String          @map("legal_name")
+  tradingName String?         @map("trading_name")
+  rcNumber    String          @unique @map("rc_number")
+  email       String          @unique
+  phone       String
+  address     String?
+  city        String?
+  status      PartnerStatus   @default(PENDING_KYC)
+
+  settlementBankName      String? @map("settlement_bank_name")
+  settlementAccountNumber String? @map("settlement_account_number")
+  settlementAccountName   String? @map("settlement_account_name")
+
+  users     DistributorUser[]
+  kyc       DistributorKyc[]
+  apiKeys   DistributorApiKey[]
+  grants    DistributorAccessGrant[]
+  customers CustomerDistributor[]
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([type])
+  @@map("distributors")
+}
+
+model DistributorUser {
+  id            String      @id @default(uuid(7)) @db.Uuid
+  distributorId String      @map("distributor_id") @db.Uuid
+  email         String      @unique
+  passwordHash  String      @map("password_hash")
+  fullName      String      @map("full_name")
+  role          OrgUserRole @default(MEMBER)
+  status        UserStatus  @default(ACTIVE)
+  tokenVersion  Int         @default(0) @map("token_version")
+  distributor   Distributor @relation(fields: [distributorId], references: [id])
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+
+  @@index([distributorId])
+  @@map("distributor_users")
+}
+
+model DistributorKyc {
+  id            String      @id @default(uuid(7)) @db.Uuid
+  distributorId String      @map("distributor_id") @db.Uuid
+  status        KycStatus   @default(SUBMITTED)
+  details       Json
+  documents     Json
+  reviewedById  String?     @map("reviewed_by_id") @db.Uuid
+  reviewNote    String?     @map("review_note")
+  reviewedAt    DateTime?   @map("reviewed_at")
+  createdAt     DateTime    @default(now()) @map("created_at")
+  distributor   Distributor @relation(fields: [distributorId], references: [id])
+  reviewedBy    StaffUser?  @relation(fields: [reviewedById], references: [id])
+
+  @@index([distributorId, createdAt])
+  @@index([status])
+  @@map("distributor_kyc")
+}
+
+model DistributorApiKey {
+  id            String      @id @default(uuid(7)) @db.Uuid
+  distributorId String      @map("distributor_id") @db.Uuid
+  prefix        String      @unique
+  keyHash       String      @map("key_hash")
+  mode          KeyMode
+  scopes        String[]
+  revokedAt     DateTime?   @map("revoked_at")
+  lastUsedAt    DateTime?   @map("last_used_at")
+  createdAt     DateTime    @default(now()) @map("created_at")
+  distributor   Distributor @relation(fields: [distributorId], references: [id])
+
+  @@index([distributorId])
+  @@map("distributor_api_keys")
+}
+
+// ───────────── Customers ─────────────
+
+model Customer {
+  id              String     @id @default(uuid(7)) @db.Uuid
+  email           String     @unique
+  phone           String?    @unique
+  fullName        String     @map("full_name")
+  emailVerifiedAt DateTime?  @map("email_verified_at")
+  phoneVerifiedAt DateTime?  @map("phone_verified_at")
+  status          UserStatus @default(ACTIVE)
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+
+  providers    CustomerProvider[]
+  distributors CustomerDistributor[]
+
+  @@map("customers")
+}
+
+model CustomerProvider {
+  id         String   @id @default(uuid(7)) @db.Uuid
+  customerId String   @map("customer_id") @db.Uuid
+  providerId String   @map("provider_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at")
+  customer   Customer @relation(fields: [customerId], references: [id])
+  provider   Provider @relation(fields: [providerId], references: [id])
+
+  @@unique([customerId, providerId])
+  @@index([providerId])
+  @@map("customer_providers")
+}
+
+model CustomerDistributor {
+  id                String      @id @default(uuid(7)) @db.Uuid
+  customerId        String      @map("customer_id") @db.Uuid
+  distributorId     String      @map("distributor_id") @db.Uuid
+  externalId        String?     @map("external_id")
+  consentRecordedAt DateTime?   @map("consent_recorded_at")
+  createdAt         DateTime    @default(now()) @map("created_at")
+  customer          Customer    @relation(fields: [customerId], references: [id])
+  distributor       Distributor @relation(fields: [distributorId], references: [id])
+
+  @@unique([customerId, distributorId])
+  @@unique([distributorId, externalId])
+  @@index([distributorId])
+  @@map("customer_distributors")
+}
+
+// ───────────── Catalogue and access ─────────────
+
+model Product {
+  id         String        @id @default(uuid(7)) @db.Uuid
+  providerId String        @map("provider_id") @db.Uuid
+  type       ProductType
+  code       String
+  name       String
+  status     ProductStatus @default(DRAFT)
+  terms      Json
+  provider   Provider      @relation(fields: [providerId], references: [id])
+  plans      ProductPlan[]
+  grants     DistributorAccessGrant[]
+  createdAt  DateTime      @default(now()) @map("created_at")
+  updatedAt  DateTime      @updatedAt @map("updated_at")
+
+  @@unique([providerId, code])
+  @@index([type, status])
+  @@map("products")
+}
+
+model ProductPlan {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  productId      String   @map("product_id") @db.Uuid
+  name           String
+  coverAmount    Decimal  @map("cover_amount") @db.Decimal(18, 2)
+  pricingRule    Json     @map("pricing_rule")
+  installmentsOk Boolean  @default(false) @map("installments_ok")
+  active         Boolean  @default(true)
+  product        Product  @relation(fields: [productId], references: [id])
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([productId])
+  @@map("product_plans")
+}
+
+model DistributorAccessGrant {
+  id            String      @id @default(uuid(7)) @db.Uuid
+  distributorId String      @map("distributor_id") @db.Uuid
+  providerId    String      @map("provider_id") @db.Uuid
+  productId     String      @map("product_id") @db.Uuid
+  status        GrantStatus @default(PENDING)
+  commissionBps Int?        @map("commission_bps") // distributor share, basis points
+  reviewedById  String?     @map("reviewed_by_id") @db.Uuid // a ProviderUser
+  reviewNote    String?     @map("review_note")
+  reviewedAt    DateTime?   @map("reviewed_at")
+  createdAt     DateTime    @default(now()) @map("created_at")
+  distributor   Distributor @relation(fields: [distributorId], references: [id])
+  provider      Provider    @relation(fields: [providerId], references: [id])
+  product       Product     @relation(fields: [productId], references: [id])
+
+  @@unique([distributorId, productId])
+  @@index([providerId, status])
+  @@map("distributor_access_grants")
+}
+
+// ───────────── Cross-cutting ─────────────
+
+model AuditLog {
+  id         String    @id @default(uuid(7)) @db.Uuid
+  actorType  ActorType @map("actor_type")
+  actorId    String?   @map("actor_id") @db.Uuid
+  action     String
+  entityType String    @map("entity_type")
+  entityId   String    @map("entity_id")
+  before     Json?
+  after      Json?
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  @@index([entityType, entityId])
+  @@index([actorType, actorId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model IdempotencyKey {
+  id           String   @id @default(uuid(7)) @db.Uuid
+  scope        String
+  key          String
+  requestHash  String   @map("request_hash")
+  responseCode Int?     @map("response_code")
+  response     Json?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@unique([scope, key])
+  @@map("idempotency_keys")
 }
