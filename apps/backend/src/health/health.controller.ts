@@ -7,12 +7,15 @@ import Redis from 'ioredis';
 import { ConfigService } from '@nestjs/config';
 import { ApiOkResponse } from '@nestjs/swagger';
 import { PrismaService } from '../prisma/prisma.service';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 
 @Controller('health')
 export class HealthController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
+    @InjectQueue('notifications') private readonly notificationsQueue: Queue,
   ) {}
 
   @Get()
@@ -32,7 +35,7 @@ export class HealthController {
     return { status: 'ok', database: 'up' };
   }
 
-@Get('queue')
+  @Get('queue')
   @ApiOkResponse({ description: 'Redis is reachable' })
   async queue() {
     const redis = new Redis(
@@ -56,7 +59,11 @@ export class HealthController {
         throw new Error(`Unexpected Redis response: ${response}`);
       }
 
-      return { status: 'ok', redis: 'up' };
+      const job = await this.notificationsQueue.add('smoke-test', {
+        triggeredAt: new Date().toISOString(),
+      });
+
+      return { status: 'ok', redis: 'up', jobId: job.id };
     } catch (error) {
       throw new ServiceUnavailableException({
         status: 'error',
