@@ -5,7 +5,7 @@ import react from '@vitejs/plugin-react'
 export default defineConfig(({ mode }) => {
   // Do not prefix this variable with VITE_: it is only used by the local proxy.
   const env = loadEnv(mode, process.cwd(), '')
-  const backendOrigin = env.BACKEND_API_ORIGIN ?? 'https://theeinsurance-backend-staging.onrender.com'
+  const backendOrigin = env.BACKEND_API_ORIGIN ?? 'https://thee-main.onrender.com'
 
   return {
     plugins: [react()],
