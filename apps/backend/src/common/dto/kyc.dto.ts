@@ -1,14 +1,17 @@
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize, ArrayMinSize, IsArray, IsIn, IsInt, IsObject, IsOptional, IsString,
-  Matches, Max, Min, ValidateNested,
+  Matches, Max, MaxLength, Min, ValidateNested,
 } from 'class-validator';
 import { PartnerStatus } from '../../generated/prisma/client';
 import { IsEnum } from 'class-validator';
 
+import { KYC_DOCUMENT_KINDS } from '../../uploads/uploads.constants';
+import type { KycDocumentKind } from '../../uploads/uploads.constants';
+
 export class KycDocumentDto {
-  @IsString() kind!: string; // e.g. CAC_CERTIFICATE, TAX_CLEARANCE, DIRECTOR_ID
-  @IsString() publicId!: string;
+  @IsIn([...KYC_DOCUMENT_KINDS]) kind!: KycDocumentKind;
+  @IsString() @MaxLength(300) publicId!: string;
 }
 
 export class SubmitKycDto {

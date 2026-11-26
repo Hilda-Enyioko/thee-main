@@ -300,6 +300,7 @@ model Product {
   status     ProductStatus @default(DRAFT)
   terms      Json
   provider   Provider      @relation(fields: [providerId], references: [id])
+  defaultCommissionBps Int? @map("default_commission_bps")
   plans      ProductPlan[]
   grants     DistributorAccessGrant[]
   createdAt  DateTime      @default(now()) @map("created_at")

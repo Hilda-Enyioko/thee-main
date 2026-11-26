@@ -51,7 +51,7 @@ export class StaffService {
       if (!before) throw new NotFoundException();
       const row = await tx.staffUser.update({
         where: { id },
-        data: { status: dto.status, tokenVersion: { increment: 1 } }, // also revokes live tokens
+        data: { status: dto.status, tokenVersion: { increment: 1 } },
       });
       await this.audit.record(tx, {
         ...actorOf(actor), action: 'staff.status_changed', entityType: 'staff', entityId: id,

@@ -5,8 +5,10 @@ import { PasswordService } from '../auth/password.service';
 import { ReviewKycDto, ReviewListQueryDto, SubmitKycDto, UpdateProfileDto } from '../common/dto/kyc.dto';
 import { OnboardOrgDto } from '../common/dto/onboard-org.dto';
 import { DUPLICATE_ORG_MESSAGE, isUniqueViolation } from '../common/prisma-errors';
-import type { Prisma, Provider } from '../generated/prisma/client';
+import type { PartnerStatus, Prisma, Provider } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { UploadsService } from '../uploads/uploads.service';
+import { SignUploadDto } from '../uploads/dto/sign-upload.dto';
 
 export const toProviderView = (p: Provider) => ({
   id: p.id,
@@ -33,6 +35,7 @@ export class ProvidersService {
     private readonly prisma: PrismaService,
     private readonly passwords: PasswordService,
     private readonly audit: AuditService,
+    private readonly uploads: UploadsService,
   ) {}
 
   async onboard(dto: OnboardOrgDto) {
@@ -78,7 +81,20 @@ export class ProvidersService {
     };
   }
 
+  async signUpload(p: ProviderPrincipal, dto: SignUploadDto) {
+      if (p.orgStatus !== 'PENDING_KYC' && p.orgStatus !== 'REJECTED') {
+        throw new ConflictException('Document uploads are only open before KYC approval');
+      }
+      return this.uploads.signKycUpload('provider', p.orgId, dto.kind);
+  }
+
   async submitKyc(p: ProviderPrincipal, dto: SubmitKycDto) {
+    const documents = await this.uploads.verifyKycDocuments(
+      'provider',
+      p.orgId,
+      dto.documents,
+    );
+
     await this.prisma.$transaction(async (tx) => {
       const moved = await tx.provider.updateMany({
         where: { id: p.orgId, status: { in: ['PENDING_KYC', 'REJECTED'] } },
@@ -89,7 +105,7 @@ export class ProvidersService {
         data: {
           providerId: p.orgId,
           details: dto.details as Prisma.InputJsonObject,
-          documents: dto.documents.map((d) => ({ kind: d.kind, publicId: d.publicId })),
+          documents,
         },
       });
       await this.audit.record(tx, {
@@ -176,5 +192,34 @@ export class ProvidersService {
       return tx.provider.findUniqueOrThrow({ where: { id: providerId } });
     });
     return toProviderView(updated);
+  }
+
+  async getAdapterKey(providerId: string): Promise<string> {
+    const row = await this.prisma.provider.findUniqueOrThrow({
+      where: { id: providerId }, select: { adapterKey: true },
+    });
+    return row.adapterKey;
+  }
+
+  async getSummaries(
+    ids: string[],
+  ): Promise<Map<string, {
+    id: string;
+    name: string;
+    status: PartnerStatus;
+  }>> {
+    if (!ids.length) return new Map();
+    const rows = await this.prisma.provider.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, legalName: true, tradingName: true, status: true },
+    });
+    return new Map(rows.map((r) => [
+      r.id, 
+      { 
+        id: r.id,
+        name: r.tradingName ?? r.legalName,
+        status: r.status,
+      },
+    ]));
   }
 }
