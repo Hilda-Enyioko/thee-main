@@ -26,7 +26,7 @@ export class DistributorsController {
     return this.distributors.updateProfile(p, dto);
   }
 
-  @Access({ kind: 'provider', roles: ['ADMIN'] }) @Post('uploads/sign') @HttpCode(200)
+  @Access({ kind: 'distributor', roles: ['ADMIN'] }) @Post('uploads/sign') @HttpCode(200)
   signUpload(@CurrentPrincipal() p: DistributorPrincipal, @Body() dto: SignUploadDto) {
     return this.distributors.signUpload(p, dto);
   }
