@@ -1,11 +1,21 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { actorOf, AuditService } from '../audit/audit.service';
 import type { StaffPrincipal } from '../auth/auth.types';
 import { PasswordService } from '../auth/password.service';
 import { isUniqueViolation } from '../common/prisma-errors';
 import type { StaffUser } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateStaffDto, SetStaffStatusDto } from './dto/staff.dto';
+import {
+  CreateStaffDto,
+  DocumentUrlQueryDto,
+  SetStaffStatusDto,
+} from './dto/staff.dto';
+import { UploadsService } from '../uploads/uploads.service';
 
 const toView = (s: StaffUser) => ({
   id: s.id, email: s.email, fullName: s.fullName, role: s.role, status: s.status, createdAt: s.createdAt,
@@ -17,6 +27,7 @@ export class StaffService {
     private readonly prisma: PrismaService,
     private readonly passwords: PasswordService,
     private readonly audit: AuditService,
+    private readonly uploads: UploadsService,
   ) {}
 
   async create(actor: StaffPrincipal, dto: CreateStaffDto) {
@@ -60,5 +71,15 @@ export class StaffService {
       return row;
     });
     return toView(updated);
+  }
+
+  async kycDocumentUrl(actor: StaffPrincipal, q: DocumentUrlQueryDto) {
+    const link = this.uploads.signedDownloadUrl(q.publicId, q.format);
+    await this.prisma.$transaction((tx) =>
+      this.audit.record(tx, {
+        ...actorOf(actor), action: 'kyc.document.viewed', entityType: 'kyc_document', entityId: q.publicId,
+      }),
+    );
+    return link;
   }
 }

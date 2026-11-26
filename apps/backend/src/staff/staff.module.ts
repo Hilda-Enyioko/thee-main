@@ -4,9 +4,17 @@ import { DistributorsModule } from '../distributors/distributors.module';
 import { ProvidersModule } from '../providers/providers.module';
 import { StaffController } from './staff.controller';
 import { StaffService } from './staff.service';
+import { UploadsModule } from '../uploads/uploads.module';
+import { AccessModule } from '../access/access.module';
 
 @Module({
-  imports: [AuthModule, ProvidersModule, DistributorsModule],
+  imports: [
+    AuthModule,
+    ProvidersModule,
+    DistributorsModule,
+    AccessModule,
+    UploadsModule,
+  ],
   controllers: [StaffController],
   providers: [StaffService],
 })

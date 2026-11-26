@@ -10,6 +10,9 @@ import { AuthModule } from './auth/auth.module';
 import { AuditModule } from './audit/audit.service';
 import { ProvidersModule } from './providers/providers.module';
 import { DistributorsModule } from './distributors/distributors.module';
+import { TeamModule } from './team/team.module';
+import { AccessModule } from './access/access.module';
+import { ProductsModule } from './products/products.module';
 
 @Module({
   imports: [
@@ -26,6 +29,9 @@ import { DistributorsModule } from './distributors/distributors.module';
     ProvidersModule,
     DistributorsModule,
     StaffModule,
+    ProductsModule,
+    AccessModule,
+    TeamModule
   ],
 })
 export class AppModule {}

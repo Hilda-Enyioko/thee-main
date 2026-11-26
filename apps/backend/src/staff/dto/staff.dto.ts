@@ -1,6 +1,7 @@
-import { IsEnum, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsEnum, IsString, MaxLength, MinLength, IsIn, Matches } from 'class-validator';
 import { NormalizedEmail } from '../../common/dto/normalized-email.decorator';
 import { StaffRole, UserStatus } from '../../generated/prisma/client';
+import { KYC_ALLOWED_FORMATS } from '../../uploads/uploads.constants';
 
 export class CreateStaffDto {
   @NormalizedEmail() email!: string;
@@ -11,4 +12,12 @@ export class CreateStaffDto {
 
 export class SetStaffStatusDto {
   @IsEnum(UserStatus) status!: UserStatus;
+}
+
+export class DocumentUrlQueryDto {
+  @Matches(/^kyc\/(provider|distributor)\/[0-9a-f-]{36}\/[a-z_]+-[0-9a-f-]{36}$/, {
+    message: 'publicId is not a KYC document reference',
+  })
+  publicId!: string;
+  @IsIn([...KYC_ALLOWED_FORMATS]) format!: string;
 }

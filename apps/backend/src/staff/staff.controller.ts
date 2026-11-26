@@ -1,11 +1,13 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
 import { Access, CurrentPrincipal } from '../auth/auth.decorators';
 import type { StaffPrincipal } from '../auth/auth.types';
 import { ReviewKycDto, ReviewListQueryDto } from '../common/dto/kyc.dto';
 import { DistributorsService } from '../distributors/distributors.service';
 import { ProvidersService } from '../providers/providers.service';
-import { CreateStaffDto, SetStaffStatusDto } from './dto/staff.dto';
+import { CreateStaffDto, DocumentUrlQueryDto, SetStaffStatusDto } from './dto/staff.dto';
 import { StaffService } from './staff.service';
+import { RevokeGrantDto, StaffGrantListQueryDto } from '../access/dto/access.dto';
+import { AccessService } from '../access/access.service';
 
 const KYC_ROLES = ['SUPER_ADMIN', 'ADMIN', 'KYC_REVIEWER'] as const;
 
@@ -15,6 +17,7 @@ export class StaffController {
     private readonly staff: StaffService,
     private readonly providers: ProvidersService,
     private readonly distributors: DistributorsService,
+    private readonly access: AccessService,
   ) {}
 
   @Access({ kind: 'staff', roles: ['SUPER_ADMIN'] }) @Post('accounts')
@@ -56,5 +59,22 @@ export class StaffController {
     @Body() dto: ReviewKycDto,
   ) {
     return this.distributors.reviewKyc(a, id, dto);
+  }
+
+  @Access({ kind: 'staff', roles: KYC_ROLES }) @Get('kyc/documents/url')
+  documentUrl(@CurrentPrincipal() a: StaffPrincipal, @Query() q: DocumentUrlQueryDto) {
+    return this.staff.kycDocumentUrl(a, q);
+  }
+
+  @Access({ kind: 'staff', roles: ['SUPER_ADMIN', 'ADMIN', 'SUPPORT'] }) @Get('distributor-access')
+  listAccess(@Query() q: StaffGrantListQueryDto) { return this.access.listForStaff(q); }
+
+  @Access({ kind: 'staff', roles: ['SUPER_ADMIN', 'ADMIN'] }) @Post('distributor-access/:id/revoke') @HttpCode(200)
+  revokeAccess(
+    @CurrentPrincipal() a: StaffPrincipal,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RevokeGrantDto,
+  ) {
+    return this.access.revoke(a, id, dto);
   }
 }
